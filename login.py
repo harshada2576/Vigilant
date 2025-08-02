@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from PyQt5 import QtCore, QtGui, QtWidgets
-import resources_rc  # Import the compiled resource file
+import resources_rc  # Make sure this is compiled from your .qrc file
 
 class Ui_window(object):
     def setupUi(self, window):
         window.setObjectName("window")
-        window.resize(931, 722)
-        window.setMaximumSize(QtCore.QSize(931, 722))
+        window.resize(950, 750)
+        window.setMaximumSize(QtCore.QSize(950, 750))
         window.setStyleSheet("background-color: #F5F7FA; border: none;")
 
         self.frame = QtWidgets.QFrame(window)
@@ -41,14 +41,14 @@ class Ui_window(object):
 
         # Scroll Area for Form
         self.scrollArea = QtWidgets.QScrollArea(self.frame)
-        self.scrollArea.setGeometry(QtCore.QRect(90, 290, 761, 361))
+        self.scrollArea.setGeometry(QtCore.QRect(90, 290, 761, 500))  # Increased height
         self.scrollArea.setStyleSheet("border: none;")
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
 
         # Form Widget Contents
         self.scrollAreaWidgetContents = QtWidgets.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 761, 361))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 761, 420))  # Match scroll area
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
 
         # Username Field
@@ -109,14 +109,19 @@ class Ui_window(object):
 
         # Loading GIF
         self.loadinglabel = QtWidgets.QLabel(self.scrollAreaWidgetContents)
-        self.loadinglabel.setGeometry(QtCore.QRect(350, 340, 90, 90))
+        self.loadinglabel.setGeometry(QtCore.QRect(330, 320, 121, 90))  # Centered and fully visible
         self.loadinglabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.loadinglabel.setStyleSheet("background-color: transparent;")
         self.loadinglabel.setScaledContents(True)
-        
-        # Load GIF from resources
+
         self.movie = QtGui.QMovie(":/loading-7528.gif")
         self.loadinglabel.setMovie(self.movie)
         self.loadinglabel.hide()
+
+        # Fade-in effect
+        self.opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+        self.loadinglabel.setGraphicsEffect(self.opacity_effect)
+        self.opacity_effect.setOpacity(0.0)
 
         # Footer Links
         self.label_3 = QtWidgets.QLabel(self.scrollAreaWidgetContents)
@@ -140,16 +145,24 @@ class Ui_window(object):
         self.pushButton_2.clicked.connect(self.show_loader)
 
     def show_loader(self):
-        """Show the loading animation when login button is clicked"""
+        """Show the loading animation with fade-in"""
         self.loadinglabel.show()
         self.movie.start()
-        QtCore.QTimer.singleShot(3000, self.hide_loader)  # Hide after 3 seconds
+
+        # Fade-in animation
+        self.animation = QtCore.QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.animation.setDuration(500)
+        self.animation.setStartValue(0.0)
+        self.animation.setEndValue(1.0)
+        self.animation.start()
+
+        # Hide after 3 seconds
+        QtCore.QTimer.singleShot(10000, self.hide_loader)
 
     def hide_loader(self):
         """Hide the loading animation"""
         self.movie.stop()
         self.loadinglabel.hide()
-        # Add your login validation logic here
 
     def retranslateUi(self, window):
         _translate = QtCore.QCoreApplication.translate
