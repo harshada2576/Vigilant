@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt5 import QtCore, QtGui, QtWidgets
-import resources_rc  # Make sure this is compiled from your .qrc file
+import resources_rc  
 
 class Ui_window(object):
     def setupUi(self, window):
