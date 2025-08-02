@@ -49,25 +49,30 @@ class Ui_window(object):
         self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 759, 359))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
 
-        font_input = QtGui.QFont()
-        font_input.setPointSize(17)
+        font_label = QtGui.QFont()
+        font_label.setPointSize(17)
+
+        font_input_field = QtGui.QFont()
+        font_input_field.setPointSize(15)
 
         self.label = QtWidgets.QLabel(self.scrollAreaWidgetContents)
         self.label.setGeometry(QtCore.QRect(90, 60, 150, 50))
-        self.label.setFont(font_input)
+        self.label.setFont(font_label)
         self.label.setStyleSheet("color: #333333; background: none;")
         self.label.setObjectName("label")
 
         self.label_2 = QtWidgets.QLabel(self.scrollAreaWidgetContents)
         self.label_2.setGeometry(QtCore.QRect(90, 160, 150, 50))
-        self.label_2.setFont(font_input)
+        self.label_2.setFont(font_label)
         self.label_2.setStyleSheet("color: #333333; background: none;")
         self.label_2.setObjectName("label_2")
 
         self.lineEdit = QtWidgets.QLineEdit(self.scrollAreaWidgetContents)
-        self.lineEdit.setGeometry(QtCore.QRect(260, 60, 381, 50))
+        self.lineEdit.setGeometry(QtCore.QRect(260, 60, 381, 60))  # Increased height
+        self.lineEdit.setFont(font_input_field)
         self.lineEdit.setStyleSheet("""
             background-color: #FFFFFF;
+            color: #333333;
             border: 1px solid #DADADA;
             border-radius: 6px;
             padding-left: 10px;
@@ -76,9 +81,11 @@ class Ui_window(object):
         self.lineEdit.setObjectName("lineEdit")
 
         self.lineEdit_2 = QtWidgets.QLineEdit(self.scrollAreaWidgetContents)
-        self.lineEdit_2.setGeometry(QtCore.QRect(260, 160, 381, 50))
+        self.lineEdit_2.setGeometry(QtCore.QRect(260, 160, 381, 60))  # Increased height
+        self.lineEdit_2.setFont(font_input_field)
         self.lineEdit_2.setStyleSheet("""
             background-color: #FFFFFF;
+            color: #333333;
             border: 1px solid #DADADA;
             border-radius: 6px;
             padding-left: 10px;
@@ -88,7 +95,7 @@ class Ui_window(object):
 
         self.pushButton_2 = QtWidgets.QPushButton(self.scrollAreaWidgetContents)
         self.pushButton_2.setGeometry(QtCore.QRect(330, 250, 121, 51))
-        self.pushButton_2.setFont(font_input)
+        self.pushButton_2.setFont(font_input_field)
         self.pushButton_2.setStyleSheet("""
             QPushButton {
                 background-color: #2F80ED;
