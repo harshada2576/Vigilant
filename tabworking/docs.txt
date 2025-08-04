@@ -1,0 +1,147 @@
+CipherLink Project Documentation
+Overview
+
+CipherLink is a modular PyQt5 desktop application designed with clean separation of UI components using multiple Python files. It demonstrates a simple flow of:
+
+    Login screen → Loading screen → Main application.
+
+This modular design helps in easy maintenance, future expansion, and clean code organization.
+Project Structure
+
+CipherLink/
+│
+├─ login_widget.py       # Login screen widget (username/password input)
+├─ loading_widget.py     # Loading screen widget with progress bar
+├─ link.py               # Main application controller; manages widget transitions
+├─ resources/            # Folder with GIFs, icons, styles, etc.
+└─ __pycache__/          # Python cache files (auto-generated)
+
+Key Concepts
+1. Widgets
+
+    Each UI screen is a separate widget (QWidget subclass).
+
+    Widgets handle their own layout, design, and logic.
+
+    This modularity makes the code easier to update or swap UI parts.
+
+2. Signals & Slots
+
+    PyQt5 uses signals to notify events.
+
+    We created a custom signal login_success in LoginWidget which is emitted when user logs in successfully.
+
+    The main app (LinkApp) listens to this signal to transition from login to loading screen.
+
+3. QStackedWidget
+
+    The main window uses QStackedWidget to switch between the Login, Loading, and (future) Main Application widgets smoothly without creating new windows.
+
+    Only one widget is visible at a time.
+
+Detailed Explanation of Each Module
+1. login_widget.py
+
+    Shows username and password input fields.
+
+    Has a login button.
+
+    On login button click, shows a loading animation and disables the button.
+
+    After simulated delay, emits login_success signal with entered username and password.
+
+    Uses a color palette for consistent UI theme.
+
+Key parts:
+
+    login_success = pyqtSignal(str, str) — custom signal to notify successful login.
+
+    start_loading() — disables login button and starts animation.
+
+    stop_loading() — stops animation and emits success signal.
+
+2. loading_widget.py
+
+    Displays a progress bar and status messages.
+
+    Automatically advances progress every 100ms.
+
+    Once done, signals completion to the main app to switch to the main interface.
+
+    Uses fade-out animation when loading completes.
+
+    Also themed consistently with the app palette.
+
+3. link.py (Main Application Controller)
+
+    Inherits QMainWindow.
+
+    Holds a QStackedWidget containing LoginWidget, LoadingWidget (and later MainAppWidget).
+
+    Connects signals from LoginWidget and LoadingWidget to manage flow:
+
+        On login success, switch to loading screen.
+
+        On loading finish, switch to main application screen.
+
+    Responsible for showing the window and starting the app.
+
+How the Application Flow Works
+
+    App starts → shows LoginWidget.
+
+    User enters credentials and clicks Login.
+
+    LoginWidget disables the login button, shows animation.
+
+    After delay, LoginWidget emits login_success signal.
+
+    link.py catches this, switches to LoadingWidget.
+
+    LoadingWidget runs progress bar with steps.
+
+    Once loading completes, emits a signal (e.g., loading_finished).
+
+    link.py catches this and switches to MainAppWidget (or shows main window).
+
+Advantages of this Modular Design
+
+    Separation of concerns: UI and logic for login, loading, and main window are independent.
+
+    Scalability: You can add features or new screens without rewriting everything.
+
+    Maintainability: Bugs and UI updates can be localized.
+
+    Teamwork: Multiple developers can work on different widgets simultaneously.
+
+    Reuse: You can reuse widgets in other projects or parts of this project.
+
+Future Improvements & Next Steps
+
+    Create MainAppWidget for the main app functionality.
+
+    Add real authentication backend (database, API).
+
+    Enhance loading with real data loading steps.
+
+    Add settings, themes, or user profile management.
+
+    Implement error handling (login failure, network errors).
+
+How to Run the Project
+
+Make sure you have:
+
+    Python 3.x installed.
+
+    PyQt5 installed (pip install PyQt5).
+
+    All .py files and resources in the same directory.
+
+Run the app via:
+
+python link.py
+
+Summary
+
+You have created a clean, modular PyQt5 app that smoothly transitions between login, loading, and main screens using signals and stacked widgets. This solid foundation allows you to build more complex desktop applications efficiently.

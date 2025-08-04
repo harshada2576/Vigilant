@@ -1,0 +1,56 @@
+CipherLink Project — Development Track Record
+Milestone 1: Project Setup and Basic UI
+
+    Initialized PyQt5 project structure.
+
+    Created basic standalone login screen (login2.py) with username, password inputs, and login button.
+
+    Applied color palette and styled UI components.
+
+    Added simple loading animation placeholder in login screen.
+
+Milestone 2: Loading Screen Implementation
+
+    Developed a separate loading screen (loading.py) with progress bar and step messages.
+
+    Designed fade-out animation for smooth screen transition.
+
+    Applied consistent palette styling to loading screen components.
+
+Milestone 3: Modularization for Integration
+
+    Refactored login and loading screens into modular widgets:
+
+        Renamed and restructured login2.py → login_widget.py
+
+        Renamed and restructured loading.py → loading_widget.py
+
+    Introduced custom signals (login_success, loading_finished) for inter-widget communication.
+
+    Encapsulated UI logic and animations within respective widget classes.
+
+Milestone 4: Main Controller with QStackedWidget
+
+    Created link.py as main application window.
+
+    Integrated LoginWidget and LoadingWidget into a single QStackedWidget.
+
+    Implemented signal-slot connections to control widget transitions:
+
+        From Login to Loading on successful login.
+
+        From Loading to Main (placeholder for future main widget).
+
+    Ensured modularity and smooth flow without multiple window pop-ups.
+
+    Added error handling for missing signals and cleaned imports.
+
+Milestone 5: Code Cleanup and Documentation
+
+    Reviewed and debugged inter-widget signal emissions.
+
+    Cleaned up unused code related to nonexistent MainAppWidget.
+
+    Prepared comprehensive documentation tailored to BTech 2nd year level.
+
+    Outlined next steps and future enhancements.
