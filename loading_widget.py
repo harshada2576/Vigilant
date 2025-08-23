@@ -1,74 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-
-PALETTES = {
-    "light": {
-        "background": "#FAFAFA",
-        "primary_text": "#212121",
-        "secondary_text": "#616161",
-        "ui_borders": "#E0E0E0",
-        "accent": "#2979FF",
-        "shadow": "rgba(0,0,0,0.08)"
-    },
-    "medium": {
-        "background": "#FFF8F0",
-        "primary_text": "#4E4336",
-        "secondary_text": "#7A6F63",
-        "ui_borders": "#D7CFC5",
-        "accent": "#F57C00",
-        "shadow": "rgba(0,0,0,0.10)"
-    },
-    "dark": {
-        "background": "#121212",
-        "primary_text": "#EAEAEA",
-        "secondary_text": "#9E9E9E",
-        "ui_borders": "#2A2A2A",
-        "accent": "#BB86FC",
-        "shadow": "rgba(0,0,0,0.20)"
-    },
-}
-
-CURRENT_PALETTE = "light"
-
-def apply_palette(widget, palette_name):
-    p = PALETTES[palette_name]
-    stylesheet = f"""
-    QWidget {{
-        background-color: {p['background']};
-        color: {p['primary_text']};
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-            Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        font-size: 14px;
-        selection-background-color: {p['accent']};
-        selection-color: {p['background']};
-    }}
-
-    QLabel#primary {{
-        font-weight: 600;
-        font-size: 16px;
-        color: {p['primary_text']};
-    }}
-
-    QLabel#secondary {{
-        color: {p['secondary_text']};
-        font-size: 13px;
-    }}
-
-    QProgressBar {{
-        border: 1.5px solid {p['ui_borders']};
-        border-radius: 6px;
-        background-color: {p['ui_borders']};
-        text-align: center;
-        color: {p['primary_text']};
-        padding: 4px;
-    }}
-
-    QProgressBar::chunk {{
-        background-color: {p['accent']};
-        border-radius: 6px;
-        margin: 0;
-    }}
-    """
-    widget.setStyleSheet(stylesheet)
+from theme import *
 
 
 class LoadingWidget(QtWidgets.QWidget):
@@ -77,7 +8,7 @@ class LoadingWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(450, 200)
-        apply_palette(self, CURRENT_PALETTE)
+        apply_palette(self)
 
         self.steps = [
             "Connecting to server...",
@@ -129,9 +60,11 @@ class LoadingWidget(QtWidgets.QWidget):
         if step_index >= len(self.steps):
             self.timer.stop()
             self.label.setText("Loading complete!")
+            self.timer.start(1000) # 1000ms == 1sec interval
             self.loading_finished.emit()
             return
 
         if step_index != self.current_step:
             self.current_step = step_index
             self.label.setText(self.steps[self.current_step])
+            
