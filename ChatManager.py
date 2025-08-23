@@ -3,7 +3,7 @@ import json
 from PyQt5 import QtCore
 
 class ChatManager:
-    def __init__(self,username):
+    def __init__(self, username):
         self.username = username
         self.chat_dir = "./stash"
         if not os.path.exists(self.chat_dir):
@@ -13,30 +13,39 @@ class ChatManager:
         users = sorted([user1.lower(), user2.lower()])
         return os.path.join(self.chat_dir, f"{users[0]}-{users[1]}.jsonl")
 
-    def save_message(self, sender, reciever, message):
-        filename = self.get_chat_filename(sender, reciever)
-        with open(filename, "a") as f:
-            entry = {
-                "timestamp": QtCore.QDateTime.currentDateTime().toString(QtCore.Qt.ISODate),
-                "sender": sender,
-                "reciever": reciever
-            }
+    def save_message(self, sender, receiver, message):
+        """Save one message to chat file"""
+        filename = self.get_chat_filename(sender, receiver)
+        entry = {
+            "timestamp": QtCore.QDateTime.currentDateTime().toString(QtCore.Qt.ISODate),
+            "sender": sender,
+            "receiver": receiver,
+            "message": message
+        }
+        with open(filename, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
-       
-    def load_message(self, user1, user2):
+
+    def load_messages(self, user1, user2):
+        """Load all messages from a chat file"""
         filename = self.get_chat_filename(user1, user2)
         if not os.path.exists(filename):
             return []
-        with open(filename, "r") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             return [json.loads(line) for line in f.readlines()]
-    
+
     def get_chat_list(self):
-        # Could scan stash folder or just return static for now
-        # Example static data:
-        return [
-            {"name": "Alice", "last_message": "Hey, what's up?", "timestamp": "10:30 AM"},
-            {"name": "Bob", "last_message": "Meeting at 2 PM", "timestamp": "Yesterday"},
-            {"name": "Charlie", "last_message": "Check this out!", "timestamp": "9:15 AM"}
-        }
-
-
+        """Scan stash folder and return chat previews"""
+        chats = []
+        for fname in os.listdir(self.chat_dir):
+            if fname.endswith(".jsonl"):
+                filepath = os.path.join(self.chat_dir, fname)
+                with open(filepath, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    if lines:
+                        last_msg = json.loads(lines[-1])
+                        chats.append({
+                            "name": fname.replace(".jsonl", ""),
+                            "last_message": last_msg.get("message", ""),
+                            "timestamp": last_msg.get("timestamp", "")
+                        })
+        return chats
