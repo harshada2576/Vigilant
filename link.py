@@ -1,0 +1,47 @@
+import sys
+from PyQt5 import QtWidgets
+from login_widget import LoginWidget
+from loading_widget import LoadingWidget
+from mainwindow_widget import MainWindow
+from theme import * 
+
+
+class LinkApp(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Link")
+        self.setMinimumSize(600, 400)
+
+        self.stack = QtWidgets.QStackedWidget()
+        self.setCentralWidget(self.stack)
+
+        self.login_widget = LoginWidget()
+        self.loading_widget = LoadingWidget()
+        self.mainwindow_widget = MainWindow()
+
+        self.stack.addWidget(self.login_widget)
+        self.stack.addWidget(self.loading_widget)
+        self.stack.addWidget(self.mainwindow_widget)
+
+        self.login_widget.login_success.connect(self.on_login_success)
+        self.loading_widget.loading_finished.connect(self.on_loading_finished)
+
+        self.stack.setCurrentWidget(self.login_widget)
+
+    def on_login_success(self, username, password):
+        print(f"Login success: {username}")
+        self.stack.setCurrentWidget(self.loading_widget)
+        self.loading_widget.start_loading()
+
+    def on_loading_finished(self):
+        self.stack.setCurrentWidget(self.mainwindow_widget)
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    window = LinkApp()
+    window.show()
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()
