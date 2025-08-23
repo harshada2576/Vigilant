@@ -5,7 +5,7 @@
 > Still in progress
 ---
 in collaboration with
-| Ahmed | Avadh |
+| Ahmed | Avhad |
 |-------|-------|
 ---
 | file | working |
