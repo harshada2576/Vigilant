@@ -1,31 +1,73 @@
 # Cipher Link
----
-## secure messaging application software
----
-> Still in progress
----
-in collaboration with
-| Ahmed | Avhad |
-|-------|-------|
----
-| file | working |
-|-------|--------|
-|link.py |main working file |
-|chat messenger |main prog logic |
-|widgets py |ui frameworks |
-|encryption |basic placeholding for prototype |
-|theme |palette and theming  |
-|stash folder |used to store messages between users in user1-user2.jsonl having each line a seperate json structure|
+
+A modular, secure messaging application.
 
 ---
-> to be done 
-- integrate chat messenger
-- better mainwindow widget
-- enable encryption
-- enable persistence
-- integrate online messaging
-- make real time possible
-> - publish 
-- extend encryption and dataset
-- better server side
 
+## Project Overview
+
+Cipher Link is a work-in-progress secure messaging platform designed with modularity and extensibility in mind. The project aims to provide robust encryption, real-time communication, and a user-friendly interface.
+
+---
+
+## Collaboration
+
+| Contributors |
+|--------------|
+| Ahmed        |
+| Avhad        |
+
+---
+
+## Project Structure
+
+| Module/Folder      | Purpose/Description                                      |
+|--------------------|---------------------------------------------------------|
+| `link.py`          | Main entry point; application bootstrapper              |
+| `chat_messenger/`  | Core messaging logic (sending, receiving, processing)   |
+| `widgets.py`       | UI components and reusable widgets                      |
+| `encryption/`      | Encryption/decryption logic and cryptographic utilities |
+| `theme/`           | Theming, color palettes, and UI styling                 |
+| `stash/`           | Local message storage (`user1-user2.jsonl` per chat)    |
+
+> **Note:** Each module is designed to be self-contained and easily testable.
+
+---
+
+## Roadmap
+
+- [ ] Integrate chat logic with UI for seamless messaging
+- [ ] Refactor modules for clarity and maintainability
+- [ ] Finalize and test encryption (end-to-end)
+- [ ] Implement real-time messaging (network/server logic)
+- [ ] Enhance persistence for multi-user and multi-session support
+- [ ] Improve UI/UX (usability, accessibility, aesthetics)
+- [ ] Add unit and integration tests (especially for encryption and messaging)
+- [ ] Update documentation and code comments
+- [ ] Extend encryption and dataset capabilities
+- [ ] Improve server-side architecture
+- [ ] Prepare for public release
+
+---
+
+## Recommended Current Focus
+
+- **Integrate Chat Logic with UI:** Ensure sending, receiving, and displaying messages works seamlessly in the GUI.
+- **Finalize and Test Encryption:** Guarantee all messages are securely encrypted and decrypted.
+- **Implement Real-Time Messaging:** Add networking/server logic for real-time chat.
+- **Improve Persistence:** Robustly handle message storage for multiple users and sessions.
+- **Enhance UI/UX:** Polish the interface for usability and aesthetics.
+- **Testing:** Add comprehensive unit and integration tests.
+- **Documentation:** Keep README and code comments up to date.
+
+---
+
+## Getting Started
+
+1. Clone the repository.
+2. Install dependencies as specified in `requirements.txt`.
+3. Run `link.py` to launch the application.
+
+---
+
+> **Status:** _Active development.
