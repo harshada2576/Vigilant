@@ -1,9 +1,9 @@
 import sys
 from PyQt5 import QtWidgets
-from login_widget import LoginWidget
-from loading_widget import LoadingWidget
-from mainwindow_widget import MainWindow
-from theme import * 
+from CipherLink.login_widget import LoginWidget
+from CipherLink.loading_widget import LoadingWidget
+from CipherLink.mainwindow_widget import MainWindow
+from CipherLink.theme import * 
 
 
 class LinkApp(QtWidgets.QMainWindow):
@@ -26,15 +26,19 @@ class LinkApp(QtWidgets.QMainWindow):
         self.loading_widget.loading_finished.connect(self.on_loading_finished)
 
         self.stack.setCurrentWidget(self.login_widget)
+        self.username = None  # Track authenticated user
 
-    def on_login_success(self, username, password):
-        print(f"Login success: {username}")
+    def on_login_success(self, username):
+        # Only proceed if authentication is successful
         self.username = username
-        self.password = password
         self.stack.setCurrentWidget(self.loading_widget)
         self.loading_widget.start_loading()
 
     def on_loading_finished(self):
+        if self.username is None:
+            # Prevent access if not authenticated
+            self.stack.setCurrentWidget(self.login_widget)
+            return
         if self.mainwindow_widget is None:
             self.mainwindow_widget = MainWindow(self.username)
             self.stack.addWidget(self.mainwindow_widget)

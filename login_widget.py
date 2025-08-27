@@ -1,11 +1,11 @@
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
-from theme import *
-
+from CipherLink.theme import *
+from CipherLink.user_auth import load_users, save_users, verify_user, register_user
 
 class LoginWidget(QtWidgets.QWidget):
     login_requested = QtCore.pyqtSignal(str, str)  # username, password
-    login_success = pyqtSignal(str, str)  # Will emit username and password on success
+    login_success = pyqtSignal(str)  # Emit only username on success
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,17 +49,50 @@ class LoginWidget(QtWidgets.QWidget):
         self.login_button.clicked.connect(self.on_login_clicked)
         layout.addWidget(self.login_button, alignment=QtCore.Qt.AlignCenter)
 
+        self.register_button = QtWidgets.QPushButton("Register")
+        self.register_button.setFixedHeight(30)
+        self.register_button.clicked.connect(self.on_register_clicked)
+        layout.addWidget(self.register_button, alignment=QtCore.Qt.AlignCenter)
+
+        self.status_label = QtWidgets.QLabel("")
+        self.status_label.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(self.status_label)
+
     def on_login_clicked(self):
-        username = self.username_input.text()
+        username = self.username_input.text().strip()
         password = self.password_input.text()
         self.login_button.setEnabled(False)
-        self.login_requested.emit(username, password)
-        # for demo assume success
-        self.login_success.emit(username, password)
-        self.reset()
+        self.status_label.setText("")
+        if not username or not password:
+            self.status_label.setText("Please enter both username and password.")
+            self.login_button.setEnabled(True)
+            return
+        if verify_user(username, password):
+            self.status_label.setText("Login successful!")
+            self.login_success.emit(username)
+            self.reset()
+        else:
+            self.status_label.setText("Invalid username or password.")
+            self.login_button.setEnabled(True)
+
+    def on_register_clicked(self):
+        username = self.username_input.text().strip()
+        password = self.password_input.text()
+        self.register_button.setEnabled(False)
+        self.status_label.setText("")
+        if not username or not password:
+            self.status_label.setText("Please enter both username and password.")
+            self.register_button.setEnabled(True)
+            return
+        if register_user(username, password):
+            self.status_label.setText("Registration successful! You can now log in.")
+        else:
+            self.status_label.setText("Username already exists.")
+        self.register_button.setEnabled(True)
 
     def reset(self):
         self.username_input.clear()
         self.password_input.clear()
         self.login_button.setEnabled(True)
+        self.register_button.setEnabled(True)
 

@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
-import theme
-from ChatManager import ChatManager
+import CipherLink.heme
+from CipherLink.ChatManager import ChatManager
 
 
 class MainWindow(QtWidgets.QMainWindow):
