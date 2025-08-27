@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
-import CipherLink.heme
-from CipherLink.ChatManager import ChatManager
+import UI.theme
+from backend.ChatManager import ChatManager
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -79,6 +79,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message_line_edit.textChanged.connect(self.toggle_send_button)
 
         self.populate_chat_list()
+
+
+#    def toggle_theme(self):
+#        from theme import get_palette, set_palette, refresh_theme
+#        current = get_palette()
+#        new_theme = "dark" if current == "light" else "light"
+#        set_palette(new_theme)
+#        refresh_theme(self)
+
 
     def populate_chat_list(self):
         self.chat_list.clear()

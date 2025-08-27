@@ -1,7 +1,7 @@
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
-from CipherLink.theme import *
-from CipherLink.user_auth import load_users, save_users, verify_user, register_user
+from UI.theme import *
+from backend.user_auth import load_users, save_users, verify_user, register_user
 
 class LoginWidget(QtWidgets.QWidget):
     login_requested = QtCore.pyqtSignal(str, str)  # username, password

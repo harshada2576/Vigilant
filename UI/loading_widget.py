@@ -1,5 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from CipherLink.theme import *
+from UI.theme import *
 
 
 class LoadingWidget(QtWidgets.QWidget):

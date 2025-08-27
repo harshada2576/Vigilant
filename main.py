@@ -1,9 +1,9 @@
 import sys
 from PyQt5 import QtWidgets
-from CipherLink.login_widget import LoginWidget
-from CipherLink.loading_widget import LoadingWidget
-from CipherLink.mainwindow_widget import MainWindow
-from CipherLink.theme import * 
+from UI.login_widget import LoginWidget
+from UI.loading_widget import LoadingWidget
+from UI.mainwindow_widget import MainWindow
+from UI.theme import * 
 
 
 class LinkApp(QtWidgets.QMainWindow):
