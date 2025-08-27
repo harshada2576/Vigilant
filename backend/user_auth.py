@@ -2,7 +2,7 @@ import bcrypt
 import json
 import os
 import sqlite3
-from db import get_connection
+
 
 USERS_FILE = "users.json"
 

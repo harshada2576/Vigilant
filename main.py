@@ -1,9 +1,15 @@
+# (tried for my linux) this code will -- 
+import os                                               # Ignore system-level GTK/Xfce theme overrides
+os.environ["QT_QPA_PLATFORMTHEME"] = ""           # Let your stylesheet take full control
+
+
 import sys
 from PyQt5 import QtWidgets
 from UI.login_widget import LoginWidget
 from UI.loading_widget import LoadingWidget
 from UI.mainwindow_widget import MainWindow
 from UI.theme import * 
+
 
 
 class LinkApp(QtWidgets.QMainWindow):
@@ -46,6 +52,8 @@ class LinkApp(QtWidgets.QMainWindow):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    app.setStyle("Fusion")  # Enforce consistent style
+    app.setStyleSheet(QSS_TEMPLATE.format(**PALETTES[CURRENT_PALETTE]))
     window = LinkApp()
     window.show()
     sys.exit(app.exec_())

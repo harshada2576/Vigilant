@@ -1,6 +1,6 @@
 import sqlite3
 
-def init_db(db_name="cipherlink.db", schema_file="schema.sql"):
+def init_db(db_name="../cipherlink.db", schema_file="schema.sql"):
     with open(schema_file, "r") as f:
         schema = f.read()
 

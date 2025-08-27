@@ -28,9 +28,13 @@ PALETTES = {
     },
 }
 
-CURRENT_PALETTE = "light"
+CURRENT_PALETTE = "dark"
+
+# yea check out te following qss template got 2 choice... uncomment the better only both dont remove the other one 
+# cuz in my kali the themes are a bit funky with both
 
 # === QSS Style Template ===
+'''
 QSS_TEMPLATE = """
 QWidget {{
     background-color: {background};
@@ -108,6 +112,116 @@ QTextEdit {{
     font-size: 14px;
 }}
 """
+'''
+
+QSS_TEMPLATE = """
+QWidget {{
+    background-color: {background};
+    color: {primary_text};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+}}
+
+QMainWindow {{
+    background-color: {background};
+}}
+
+QDialog {{
+    background-color: {background};
+}}
+
+QFrame {{
+    background-color: {background};
+}}
+
+QLabel {{
+    color: {primary_text};
+}}
+
+QLabel#primary {{
+    font-weight: bold;
+    color: {accent};
+}}
+
+QLabel#chatHeader {{
+    font-size: 18px;
+    font-weight: bold;
+    color: {primary_text};
+}}
+
+QLineEdit {{
+    background-color: {background};
+    border: 1.5px solid {ui_borders};
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 15px;
+    color: {primary_text};
+}}
+
+QPushButton {{
+    background-color: {accent};
+    color: white;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 600;
+}}
+
+QPushButton:hover {{
+    background-color: {primary_text};
+    color: {background};
+}}
+
+QPushButton:pressed {{
+    background-color: {accent};
+    color: white;
+}}
+
+QProgressBar {{
+    border: 1px solid {ui_borders};
+    border-radius: 5px;
+    text-align: center;
+    background-color: {background};
+}}
+
+QProgressBar::chunk {{
+    background-color: {accent};
+    width: 10px;
+    margin: 1px;
+}}
+
+QListWidget {{
+    border: 1px solid {ui_borders};
+    background-color: {background};
+    color: {primary_text};
+}}
+
+QTextEdit {{
+    background-color: {background};
+    border-radius: 8px;
+    padding: 8px;
+    color: {primary_text};
+    font-size: 14px;
+}}
+
+QSplitter::handle {{
+    background-color: {ui_borders};
+}}
+
+QScrollBar:vertical, QScrollBar:horizontal {{
+    background-color: {background};
+}}
+
+QScrollBar::handle {{
+    background-color: {accent};
+}}
+
+QListWidget::item:selected {{
+    background-color: {accent};
+    color: white;
+}}
+"""
+
 
 # === Public Theme Functions ===
 
