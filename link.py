@@ -17,11 +17,10 @@ class LinkApp(QtWidgets.QMainWindow):
 
         self.login_widget = LoginWidget()
         self.loading_widget = LoadingWidget()
-        self.mainwindow_widget = MainWindow()
+        self.mainwindow_widget = None  # Delay creation
 
         self.stack.addWidget(self.login_widget)
         self.stack.addWidget(self.loading_widget)
-        self.stack.addWidget(self.mainwindow_widget)
 
         self.login_widget.login_success.connect(self.on_login_success)
         self.loading_widget.loading_finished.connect(self.on_loading_finished)
@@ -30,10 +29,15 @@ class LinkApp(QtWidgets.QMainWindow):
 
     def on_login_success(self, username, password):
         print(f"Login success: {username}")
+        self.username = username
+        self.password = password
         self.stack.setCurrentWidget(self.loading_widget)
         self.loading_widget.start_loading()
 
     def on_loading_finished(self):
+        if self.mainwindow_widget is None:
+            self.mainwindow_widget = MainWindow(self.username)
+            self.stack.addWidget(self.mainwindow_widget)
         self.stack.setCurrentWidget(self.mainwindow_widget)
 
 def main():
