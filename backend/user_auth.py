@@ -6,6 +6,13 @@ import sqlite3
 
 USERS_FILE = "users.json"
 
+def get_connection(db_path=None):
+    if db_path is None:
+        # Default to the project root's cipherlink.db
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(base_dir, "cipherlink.db")
+    return sqlite3.connect(db_path)
+
 
 def load_users():
     if not os.path.exists(USERS_FILE):
