@@ -1,46 +1,69 @@
 import bcrypt
-import json
-import os
 import sqlite3
+import os
 
+DB_FILE = "cipherlink.db"
 
-USERS_FILE = "users.json"
+# Ensure the database and table exist
+def initialize_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT,
+            email TEXT UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
 
+# Get database connection
+def get_connection():
+    return sqlite3.connect(DB_FILE)
 
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    with open(USERS_FILE, "r") as f:
-        return json.load(f)
-
-def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f)
-
+# Register a new user
 def register_user(username, password):
+    initialize_db()
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+    # Check if user already exists
+    cursor.execute("SELECT username FROM users WHERE username=?", (username,))
     if cursor.fetchone():
-        print(f"User {username} already exists.")
+        print("User already exists!")
         conn.close()
         return False
-
-    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, hashed))
+    
+    # Hash the password
+    password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    
+    # Store user
+    cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                   (username, password_hash))
     conn.commit()
     conn.close()
+    print("User registered successfully!")
     return True
 
-
+# Verify user login
 def verify_user(username, password):
+    initialize_db()
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
-    row = cursor.fetchone()
+    
+    cursor.execute("SELECT password_hash FROM users WHERE username=?", (username,))
+    result = cursor.fetchone()
     conn.close()
-    if not row:
-        return False
-    stored_hash = row[0]
-    return bcrypt.checkpw(password.encode(), stored_hash.encode())
+    
+    if result is None:
+        return False  # user not found
+    
+    stored_hash = result[0]  # this is bytes from BLOB
+    if isinstance(stored_hash, str):
+        stored_hash = stored_hash.encode('utf-8')  # safety, though BLOB returns bytes
+    
+    return bcrypt.checkpw(password.encode(), stored_hash)

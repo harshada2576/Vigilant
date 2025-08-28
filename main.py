@@ -49,6 +49,7 @@ class LinkApp(QtWidgets.QMainWindow):
             self.mainwindow_widget = MainWindow(self.username)
             self.stack.addWidget(self.mainwindow_widget)
         self.stack.setCurrentWidget(self.mainwindow_widget)
+        self.resize(900, 600)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
