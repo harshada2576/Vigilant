@@ -1,3 +1,6 @@
+-- 1. Enable Foreign Keys (Always good practice)
+PRAGMA foreign_keys = ON;
+
 -- Users table: stores user credentials and profile info
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     display_name TEXT,
     email TEXT UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
 );
 
 -- Conversations table: supports group and direct chats
@@ -13,7 +17,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT, -- For group chats; NULL for direct
     is_group BOOLEAN DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    admin_id,
+    FOREIGN KEY(admin_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Participants table: links users to conversations
@@ -23,8 +30,10 @@ CREATE TABLE IF NOT EXISTS participants (
     conversation_id INTEGER NOT NULL,
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     role TEXT DEFAULT 'member',
+    last_read_message_id INTEGER,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY(last_read_message_id) REFERENCES messages(id) ON DELETE SET NULL,
     UNIQUE(user_id, conversation_id)
 );
 
