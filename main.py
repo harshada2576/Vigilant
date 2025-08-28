@@ -1,7 +1,7 @@
-# (tried for my linux) this code will -- 
+#----------------------------                           # (tried for my linux) this code will -- 
 import os                                               # Ignore system-level GTK/Xfce theme overrides
-os.environ["QT_QPA_PLATFORMTHEME"] = ""           # Let your stylesheet take full control
-
+os.environ["QT_QPA_PLATFORMTHEME"] = ""                 # Let your stylesheet take full control
+#----------------------------
 
 import sys
 from PyQt5 import QtWidgets

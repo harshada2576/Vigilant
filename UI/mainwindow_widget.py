@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
-import UI.theme
+import UI.theme as theme
 from backend.ChatManager import ChatManager
 
 

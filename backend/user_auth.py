@@ -1,53 +1,76 @@
 import bcrypt
-import json
 import os
 import sqlite3
 
 
-USERS_FILE = "users.json"
+DB_path = "cipherlink.db"
 
-def get_connection(db_path=None):
-    if db_path is None:
-        # Default to the project root's cipherlink.db
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        db_path = os.path.join(base_dir, "cipherlink.db")
-    return sqlite3.connect(db_path)
+def hash_password(password):
+    """Hashes a password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
 
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    with open(USERS_FILE, "r") as f:
-        return json.load(f)
+def get_connection(db_path=DB_path):
+    if os.path.exists(db_path):
+        return sqlite3.connect(db_path)
+    else:
+        print(f"Databse file : {path} : does not exists.")
+        return None
 
-def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f)
+
+def load_user(user):
+    pass
 
 def register_user(username, password):
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-    if cursor.fetchone():
-        print(f"User {username} already exists.")
+    if not username or not password:
+        return {"success": False, "message": "Username and password cannot be empty."}
+    try: 
+        conn = get_connection()
+        cur = conn.cursor()
+
+        password_hash = hash_password(password)
+
+        cur.execute("""
+            INSERT INTO users (username, password_hash)
+            VALUES (?,?)
+        """, (username, password_hash))
+
+        conn.commit()
         conn.close()
-        return False
+        return {"success": True, "message": "Username: {username} registered successfully."}
+    
+    except sqlite3.IntegrityError as e:
+        if "UNIQUE constraint failed: users.username" in str(e):
+            return {"success": False, "message": "Username: {username} is already taken."}
+        return {"success": False, "message": f"Database Integrity Error: {str(e)}"}
 
-    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, hashed))
-    conn.commit()
-    conn.close()
-    return True
+    except Exception as e:
+        return {"success": False, "message": f"Unexpected Error: {str(e)}"}
 
 
-def verify_user(username, password):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return False
-    stored_hash = row[0]
-    return bcrypt.checkpw(password.encode(), stored_hash.encode())
+def verify_user(username, password, db_path=DB_path):
+    if not username or not password:
+        return {"success": False, "message": "Username and password are required."}
+    
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT password_hash FROM users WHERE username = ?
+        """, (username,))
+        result = cur.fetchone()
+        conn.close()
+
+        if not result:
+            return {"success": False, "message": "Invalid username or password."}
+
+        stored_hash = result[0]
+    
+        if bcrypt.checkpw(password.encode('utf-8'), stored_hash if isinstance(stored_hash, bytes) else stored_hash.encode('utf-8')):  
+            return {"success": True, "message": f"Welcome Back, {username}!"}
+        else: 
+            return {"success": False, "message": "Invalid username or password."}
+
+    except Exception as e:
+        return {"success": False, "message": f"login error: {str(e)}"}
