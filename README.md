@@ -6,7 +6,7 @@ A modular, secure messaging application.
 
 ## Project Overview
 
-Cipher Link is a work-in-progress secure messaging platform designed with modularity and extensibility in mind. The project aims to provide robust encryption, real-time communication, and a user-friendly interface.
+Cipher Link is a secure, extensible messaging platform built with modularity and scalability in mind. The project now features robust password hashing, normalized database storage (SQLite), and a clear separation between backend logic and UI components. It is designed for future enhancements such as real-time communication, advanced encryption, and group chat support.
 
 ---
 
@@ -22,75 +22,77 @@ Cipher Link is a work-in-progress secure messaging platform designed with modula
 ## Project Structure
 
 | Module/Folder      | Purpose/Description                                      |
-|-------------------|---------------------------------------------------------|
-| `main.py`         | Main entry point; application bootstrapper              |
-| `chat_messenger/` | Core messaging logic (sending, receiving, processing)   |
-| `widgets.py`      | UI components and reusable widgets                       |
-| `encryption/`     | Encryption/decryption logic and cryptographic utilities |
-| `theme/`          | Theming, color palettes, and UI styling                  |
-| `stash/`          | Local message storage (`user1-user2.jsonl` per chat)     |
-
-> **Note:** Each module is designed to be self-contained and easily testable.
-
----
-
-## Roadmap
-
-- [ ] Integrate chat logic with UI for seamless messaging  
-- [ ] Refactor modules for clarity and maintainability  
-- [ ] Finalize and test encryption (end-to-end)  
-- [ ] Implement real-time messaging (network/server logic)  
-- [ ] Enhance persistence for multi-user and multi-session support  
-- [ ] Improve UI/UX (usability, accessibility, aesthetics)  
-- [ ] Add unit and integration tests (especially for encryption and messaging)  
-- [ ] Update documentation and code comments  
-- [ ] Extend encryption and dataset capabilities  
-- [ ] Improve server-side architecture  
-- [ ] Prepare for public release  
+|--------------------|---------------------------------------------------------|
+| `main.py`          | Main entry point; application bootstrapper              |
+| `backend/`         | Core backend logic: database, authentication, chat      |
+| `UI/`              | All UI components and widgets                           |
+| `cipherlink.db`    | SQLite database file (auto-created/managed)             |
+| `requirements.txt` | Python dependencies                                     |
+| `README.md`        | Project documentation                                   |
+| `migrations/`      | (Optional) Data migration scripts                       |
+| `stash/`           | (Legacy) Old message storage for migration/testing      |
 
 ---
 
-## Recommended Current Focus
+## Current Status
 
-- **Integrate Chat Logic with UI:** Ensure sending, receiving, and displaying messages works seamlessly in the GUI.  
-- **Finalize and Test Encryption:** Guarantee all messages are securely encrypted and decrypted.  
-- **Implement Real-Time Messaging:** Add networking/server logic for real-time chat.  
-- **Improve Persistence:** Robustly handle message storage for multiple users and sessions.  
-- **Enhance UI/UX:** Polish the interface for usability and aesthetics.  
-- **Testing:** Add comprehensive unit and integration tests.  
-- **Documentation:** Keep README and code comments up to date.  
+- **User authentication**: Secure, using hashed passwords and SQLite.
+- **Chat storage**: Normalized, scalable database schema for users, conversations, participants, and messages.
+- **UI**: Modular widgets for login, main window, and theming.
+- **Data migration**: Scripts available to import legacy chat data from `stash/`.
+- **Project structure**: Modular, maintainable, and ready for further development.
+
+---
+
+## Roadmap (Prioritized)
+
+1. **Integrate Chat Logic with UI**
+   - Seamless sending, receiving, and displaying of messages in the GUI.
+2. **Implement Real-Time Messaging**
+   - Add networking/server logic for live chat.
+3. **Finalize and Test End-to-End Encryption**
+   - Ensure all messages are securely encrypted/decrypted.
+4. **Enhance Persistence**
+   - Robust multi-user and multi-session support.
+5. **Improve UI/UX**
+   - Usability, accessibility, and visual polish.
+6. **Add Unit and Integration Tests**
+   - Especially for authentication, encryption, and messaging.
+7. **Update Documentation**
+   - Keep README and code comments up to date.
+8. **Extend Group Chat and Admin Features**
+   - Roles, group management, and advanced permissions.
+9. **Improve Server-Side Architecture**
+   - Prepare for distributed or cloud deployment.
+10. **Prepare for Public Release**
+    - Security audit, packaging, and deployment scripts.
 
 ---
 
 ## Getting Started
 
-1. Clone the repository:
-
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/seucra/CipherLink.git
    cd CipherLink
-   ````
+   ```
 
-2. Install dependencies:
-
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Initialize the SQLite database (creates `cipherlink.db`):
-
+3. **Initialize the SQLite database:**
    ```bash
-   python3 initialize/init_db.py
+   python3 backend/init_db.py
    ```
 
-   You can specify a custom database filename:
-
+4. **(Optional) Import legacy chat data:**
    ```bash
-   python3 initialize/init_db.py mydatabase.db
+   python3 migrations/import_stash.py
    ```
 
-4. Run the application:
-
+5. **Run the application:**
    ```bash
    python3 main.py
    ```
@@ -99,25 +101,26 @@ Cipher Link is a work-in-progress secure messaging platform designed with modula
 
 ## Database Initialization
 
-Cipher Link uses an SQLite database for storing users, conversations, participants, and messages. The database schema is defined in `initialize/schema.sql`. Running `init_db.py` will create the database and necessary tables automatically.
+Cipher Link uses an SQLite database for storing users, conversations, participants, and messages. The schema is defined in `backend/schema.sql`. Running `init_db.py` will create the database and necessary tables automatically.
 
 To reset or create a fresh database, rerun:
 
 ```bash
-python3 initialize/init_db.py
+python3 backend/init_db.py
 ```
 
 ---
 
 ## Dependencies
 
-* Python 3.8+
-* [cryptography](https://pypi.org/project/cryptography/)
-* [PyCryptodome](https://pypi.org/project/pycryptodome/)
+- Python 3.8+
+- [cryptography](https://pypi.org/project/cryptography/)
+- [PyCryptodome](https://pypi.org/project/pycryptodome/)
 
 All dependencies are listed in `requirements.txt`.
 
 ---
 
-> *Status: Active development*
+
+> **Status:** Active development – core architecture in place, major features being integrated.
 
