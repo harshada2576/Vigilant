@@ -1,22 +1,3 @@
-# Project Requirements
-
-This document specifies the essential requirements for **CipherLink**.
-
-## Functional Requirements
-
-- Encrypt and decrypt messages securely.
-- Support AES and RSA encryption algorithms.
-- User authentication and authorization.
-- Log all cryptographic actions.
-
-## Non-Functional Requirements
-
-- Python 3.8+.
-- Use `cryptography` or `PyCryptodome` libraries.
-- Include unit and integration tests.
-
-## Dependencies
-
-- Python 3.8+
-- cryptography
-- PyCryptodome
+cryptography
+pycryptodome
+pyqt5
