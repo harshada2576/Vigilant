@@ -2,50 +2,64 @@ import os
 import json
 from PyQt5 import QtCore
 
-class ChatManager:
+DB_path
+
+class Manager:
     def __init__(self, username):
         self.username = username
-        self.chat_dir = "./stash"
-        if not os.path.exists(self.chat_dir):
-            os.makedirs(self.chat_dir)
+        self.conn = sqlite3.connect(DB_path)
+        self.conn.row_factory = sqlite3.Row
+        self.cur = self.conn.cursor()
+        
+        self.cur.execute("""
+            SELECT id FROM users WHERE username = ?
+        """, (username,))
+        self.user_id = self.cur.fetchone()['id']
 
-    def get_chat_filename(self, user1, user2):
-        users = sorted([user1.lower(), user2.lower()])
-        return os.path.join(self.chat_dir, f"{users[0]}-{users[1]}.jsonl")
+    def send_message(self, conversation_id, sender_id, content):
+        self.cur.execute("""
+            INSERT INTO messages (conversation_id, sender_id, content) VALUES (?,?,?)
+        """, (conversation_id, sender_id, content))
 
-    def save_message(self, sender, receiver, message):
-        """Save one message to chat file"""
-        filename = self.get_chat_filename(sender, receiver)
-        entry = {
-            "timestamp": QtCore.QDateTime.currentDateTime().toString(QtCore.Qt.ISODate),
-            "sender": sender,
-            "receiver": receiver,
-            "message": message
-        }
-        with open(filename, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
+        self.cur.execute("""
+            UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        """, (conversation_id,))
+        self.conn.commit()
 
-    def load_messages(self, user1, user2):
-        """Load all messages from a chat file"""
-        filename = self.get_chat_filename(user1, user2)
-        if not os.path.exists(filename):
-            return []
-        with open(filename, "r", encoding="utf-8") as f:
-            return [json.loads(line) for line in f.readlines()]
+    def get_messeges(self, conversation_id, limit=50):
+        self.cur.execute("""
+            SELECT * FROM messeges WHERE conversation_id = ? ORDER_BY timestamp DESC LIMIT ?
+        """, (conversation_id, limit))
 
-    def get_chat_list(self):
-        """Scan stash folder and return chat previews"""
-        chats = []
-        for fname in os.listdir(self.chat_dir):
-            if fname.endswith(".jsonl"):
-                filepath = os.path.join(self.chat_dir, fname)
-                with open(filepath, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                    if lines:
-                        last_msg = json.loads(lines[-1])
-                        chats.append({
-                            "name": fname.replace(".jsonl", ""),
-                            "last_message": last_msg.get("message", ""),
-                            "timestamp": last_msg.get("timestamp", "")
-                        })
-        return chats
+        return self.cur.fetchall()
+
+    def get_conversations(self):
+        self.cur.execute("""
+            SELECT c.* FROM conversations c JOIN participants p ON c.id = p.conversation_id WHERE p.user_id = ?
+        """, (self.user['id']))
+
+        return self.cur.fetchall()
+
+    def create_conversation(self, user_ids, name, is_group=False):
+        admin_id = user_id if is_group else None
+        self.cur.execute("""
+            INSERT INTO conversations (name, is_group, admin_id) VALUES (?,?,?)
+        """, (name, is_group, admin_id))
+        conversation_id = self.cur.lastrowid
+
+        for uid in user_ids:
+            self.cur.execute("""
+                INSERT INTO participants (user_id, conversation_id) VALUES (?,?)
+            """, (uid, conversation_id))
+
+        self.conn.commit()
+        return conversation_id
+
+    def update_last_read(self, user_id, conversation_id, message_id):
+        self.cur.execute("""
+            UPDATE participants SET last_read_message_id = ? WHERE user_id = ? AND conversation_id = ?
+        """, (message_id, user_id, conversation_id))
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()

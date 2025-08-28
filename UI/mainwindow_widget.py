@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
 import UI.theme as theme
-from backend.ChatManager import ChatManager
+from backend.manager import Manager
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -10,7 +10,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setMinimumSize(900, 600)
         theme.apply_palette(self)
         self.username = username
-        self.chat_manager = ChatManager(username)
+        self.manager = Manager(username)
         self.current_chat = None
 
         # Central widget and layout
@@ -91,7 +91,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def populate_chat_list(self):
         self.chat_list.clear()
-        chats = self.chat_manager.get_chat_list()
+        chats = self.manager.get_chat_list()
         for chat in chats:
             item = QtWidgets.QListWidgetItem(f"{chat['name']}  ({chat['timestamp']})")
             item.setData(QtCore.Qt.UserRole, chat['name'])
@@ -102,7 +102,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.current_chat = contact
         self.chat_header.setText(f"Chat with {contact}")
         self.chat_area.clear()
-        messages = self.chat_manager.load_messages(self.username, contact)
+        messages = self.manager.load_messages(self.username, contact)
         for msg in messages:
             sender = msg['sender']
             text = msg['message']
@@ -116,7 +116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         message = self.message_line_edit.text().strip()
         if not message or not self.current_chat:
             return
-        self.chat_manager.save_message(self.username, self.current_chat, message)
+        self.manager.save_message(self.username, self.current_chat, message)
         self.message_line_edit.clear()
         self.load_chat(self.chat_list.currentItem())
 

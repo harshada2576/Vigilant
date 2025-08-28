@@ -67,7 +67,7 @@ def verify_user(username, password, db_path=DB_path):
 
         stored_hash = result[0]
     
-        if bcrypt.checkpw(password.encode('utf-8'), stored_hash if isinstance(stored_hash, bytes) else stored_hash.encode('utf-8')):  
+        if bcrypt.checkpw(password.encode('utf-8'), stored_hash):  
             return {"success": True, "message": f"Welcome Back, {username}!"}
         else: 
             return {"success": False, "message": "Invalid username or password."}
