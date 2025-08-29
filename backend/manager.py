@@ -1,14 +1,11 @@
-import os
-import json
 import sqlite3
-from PyQt5 import QtCore
 
 DB_path = "cipherlink.db"
 
 class Manager:
-    def __init__(self, username):
+    def __init__(self, username, db_path = DB_path):
         self.username = username
-        self.conn = sqlite3.connect(DB_path)
+        self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
         
@@ -27,9 +24,9 @@ class Manager:
         """, (conversation_id,))
         self.conn.commit()
 
-    def get_messeges(self, conversation_id, limit=50):
+    def get_messages(self, conversation_id, limit=50):
         self.cur.execute("""
-            SELECT * FROM messeges WHERE conversation_id = ? ORDER_BY timestamp DESC LIMIT ?
+            SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?
         """, (conversation_id, limit))
 
         return self.cur.fetchall()
@@ -37,7 +34,7 @@ class Manager:
     def get_conversations(self):
         self.cur.execute("""
             SELECT c.* FROM conversations c JOIN participants p ON c.id = p.conversation_id WHERE p.user_id = ?
-        """, (self.user['id']))
+        """, (self.user_id,))
 
         return self.cur.fetchall()
 

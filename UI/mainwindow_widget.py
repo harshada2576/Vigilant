@@ -8,7 +8,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.username = username
         self.manager = Manager(username)
-        self.current_chat = None
+        self.current_chat_id = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -100,32 +100,36 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def populate_chat_list(self):
         self.chat_list.clear()
-        chats = self.manager.get_chat_list()
-        for chat in chats:
-            item = QtWidgets.QListWidgetItem(f"{chat['name']}  ({chat['timestamp']})")
-            item.setData(QtCore.Qt.UserRole, chat['name'])
+        conversations = self.manager.get_conversations()
+        for conv in conversations:
+            name = conv['name']
+            item = QtWidgets.QListWidgetItem(f"{name}")
+            item.setData(QtCore.Qt.UserRole, conv['id'])
             self.chat_list.addItem(item)
 
     def load_chat(self, item):
-        contact = item.data(QtCore.Qt.UserRole)
-        self.current_chat = contact
-        self.chat_header.setText(f"Chat with {contact}")
+        conversation_id = item.data(QtCore.Qt.UserRole)
+        self.current_chat_id = conversation_id
+        # Find conversation name for header
+        name = item.text().split('  (')[0]
+        self.chat_header.setText(f"Chat: {name}")
         self.chat_area.clear()
-        messages = self.manager.load_messages(self.username, contact)
+        messages = self.manager.get_messages(conversation_id)
         for msg in messages:
-            sender = msg['sender']
-            text = msg['message']
-            time = msg['timestamp']
-            if sender == self.username:
-                self.chat_area.append(f"<b style='color:#2979FF'>You:</b> {text} <span style='color:#888;font-size:10px'>[{time}]</span>")
-            else:
-                self.chat_area.append(f"<b>{sender}:</b> {text} <span style='color:#888;font-size:10px'>[{time}]</span>")
+            sender_id = msg['sender_id']
+            text = msg['content']
+            time = msg['timestamp'] if 'timestamp' in msg.keys() else ''
+            sender = "You" if sender_id == self.manager.user_id else f"User {sender_id}"
+            color = "#2979FF" if sender_id == self.manager.user_id else "#000"
+            self.chat_area.append(
+                f"<b style='color:{color}'>{sender}:</b> {text} <span style='color:#888;font-size:10px'>[{time}]</span>"
+            )
 
     def send_message(self):
         message = self.message_line_edit.text().strip()
-        if not message or not self.current_chat:
+        if not message or not self.current_chat_id:
             return
-        self.manager.save_message(self.username, self.current_chat, message)
+        self.manager.send_message(self.current_chat_id, self.manager.user_id, message)
         self.message_line_edit.clear()
         self.load_chat(self.chat_list.currentItem())
 
