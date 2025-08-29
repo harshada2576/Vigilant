@@ -1,6 +1,11 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
 import UI.theme as theme
+<<<<<<< HEAD
 from backend.manager import Manager
+=======
+from backend.ChatManager import ChatManager
+from UI.settings_widget import SettingsWidget
+>>>>>>> h
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -31,6 +36,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings_button = QtWidgets.QPushButton("Settings")
         self.sidebar_layout.addWidget(self.new_chat_button)
         self.sidebar_layout.addWidget(self.settings_button)
+        self.new_chat_button.clicked.connect(self.new_chat)
+        self.settings_button.clicked.connect(self.open_settings)
         self.sidebar_layout.addStretch()
         self.main_layout.addWidget(self.sidebar_widget, 0)
 
@@ -122,5 +129,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def toggle_send_button(self):
         self.send_button.setEnabled(bool(self.message_line_edit.text().strip()))
+    def new_chat(self):
+        username, ok = QtWidgets.QInputDialog.getText(self, "New Chat", "Enter username:")
+        if ok and username.strip():
+            if self.chat_manager.create_conversation(self.username, username):
+                self.populate_chat_list()
+            else:
+             QtWidgets.QMessageBox.warning(self, "Error", "Could not create chat. User may not exist.")
+
+    def open_settings(self):
+         QtWidgets.QMessageBox.information(self, "Settings", "Settings dialog will go here.")
+    def open_settings(self):
+        self.settings_window = SettingsWidget(self.username, self)
+        self.settings_window.show()
+
+# ...existing code...
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    # Replace 'YourUsername' with a test username or prompt for input
+    window = MainWindow("YourUsername")
+    window.show()
+    sys.exit(app.exec_())
 
 

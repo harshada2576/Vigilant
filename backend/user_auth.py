@@ -1,14 +1,14 @@
-import bcrypt
 import os
+import bcrypt
 import sqlite3
 
+DB_FILE = "cipherlink.db"
 
 DB_path = "cipherlink.db"
 
 def hash_password(password):
     """Hashes a password using bcrypt."""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
 
 def get_connection(db_path=DB_path):
     if os.path.exists(db_path):
@@ -74,3 +74,4 @@ def verify_user(username, password, db_path=DB_path):
 
     except Exception as e:
         return {"success": False, "message": f"login error: {str(e)}"}
+

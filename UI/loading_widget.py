@@ -67,4 +67,14 @@ class LoadingWidget(QtWidgets.QWidget):
         if step_index != self.current_step:
             self.current_step = step_index
             self.label.setText(self.steps[self.current_step])
+
+if __name__ == "__main__":
+    import sys
+    from PyQt5.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+    w = LoadingWidget()
+    w.show()
+    w.start_loading()   # trigger the loading animation
+    sys.exit(app.exec_())
             

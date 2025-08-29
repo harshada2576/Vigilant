@@ -1,7 +1,7 @@
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from UI.theme import *
-from backend.user_auth import load_user, verify_user, register_user
+from backend.user_auth import verify_user, register_user
 
 class LoginWidget(QtWidgets.QWidget):
     login_requested = QtCore.pyqtSignal(str, str)  # username, password
@@ -101,3 +101,18 @@ class LoginWidget(QtWidgets.QWidget):
         self.login_button.setEnabled(True)
         self.register_button.setEnabled(True)
 
+if __name__ == "__main__":
+    import sys
+    from PyQt5.QtWidgets import QApplication
+
+    # --- Dummy backend functions for testing only ---
+    def verify_user(username, password):
+        return username == "test" and password == "123"
+
+    def register_user(username, password):
+        return True
+
+    app = QApplication(sys.argv)
+    w = LoginWidget()
+    w.show()
+    sys.exit(app.exec_())
