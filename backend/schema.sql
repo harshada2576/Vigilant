@@ -1,26 +1,21 @@
 -- 1. Enable Foreign Keys (Always good practice)
 PRAGMA foreign_keys = ON;
 
--- Users table: stores user credentials and profile info
+-- Users table: stores user credentials and information
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    display_name TEXT,
-    email TEXT UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login TIMESTAMP
+    password_hash TEXT NOT NULL
 );
 
--- Conversations table: supports group and direct chats
+-- Conversations table: stores chat groups or direct chats
 CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT, -- For group chats; NULL for direct
+    name TEXT,
     is_group BOOLEAN DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    admin_id INTEGER,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    admin_id,
-    FOREIGN KEY(admin_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (admin_id) REFERENCES users(id)
 );
 
 -- Participants table: links users to conversations
@@ -28,29 +23,19 @@ CREATE TABLE IF NOT EXISTS participants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     conversation_id INTEGER NOT NULL,
-    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    role TEXT DEFAULT 'member',
     last_read_message_id INTEGER,
-    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-    FOREIGN KEY(last_read_message_id) REFERENCES messages(id) ON DELETE SET NULL,
-    UNIQUE(user_id, conversation_id)
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
 );
 
--- Messages table: stores all messages
+-- Messages table: stores messages sent in conversations
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL,
     sender_id INTEGER NOT NULL,
     content TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status TEXT DEFAULT 'sent',
-    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-    FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+    FOREIGN KEY (sender_id) REFERENCES users(id)
 );
-
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_participants_user_id ON participants(user_id);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
