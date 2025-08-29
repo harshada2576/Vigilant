@@ -1,11 +1,7 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
 import UI.theme as theme
-<<<<<<< HEAD
 from backend.manager import Manager
-=======
-from backend.ChatManager import ChatManager
 from UI.settings_widget import SettingsWidget
->>>>>>> h
 
 
 class MainWindow(QtWidgets.QMainWindow):

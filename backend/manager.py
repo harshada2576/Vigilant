@@ -2,7 +2,7 @@ import os
 import json
 from PyQt5 import QtCore
 
-DB_path
+DB_path = "cipherlink.db"
 
 class Manager:
     def __init__(self, username):
