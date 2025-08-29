@@ -1,8 +1,9 @@
 import os
 import json
+import sqlite3
 from PyQt5 import QtCore
 
-DB_path
+DB_path = "cipherlink.db"
 
 class Manager:
     def __init__(self, username):

@@ -37,8 +37,9 @@ class LinkApp(QtWidgets.QMainWindow):
     def on_login_success(self, username):
         # Only proceed if authentication is successful
         self.username = username
-        self.stack.setCurrentWidget(self.loading_widget)
-        self.loading_widget.start_loading()
+        self.on_loading_finished()
+#        self.stack.setCurrentWidget(self.loading_widget)
+#        self.loading_widget.start_loading()
 
     def on_loading_finished(self):
         if self.username is None:

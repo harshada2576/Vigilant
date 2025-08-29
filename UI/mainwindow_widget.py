@@ -6,12 +6,15 @@ from backend.manager import Manager
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, username, parent=None):
         super().__init__()
-        self.setWindowTitle("CipherLink Messenger")
-        self.setMinimumSize(900, 600)
-        theme.apply_palette(self)
         self.username = username
         self.manager = Manager(username)
         self.current_chat = None
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.setWindowTitle("CipherLink Messenger")
+        self.setMinimumSize(900, 600)
+        theme.apply_palette(self)
 
         # Central widget and layout
         self.central_widget = QtWidgets.QWidget()
@@ -19,75 +22,81 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_layout = QtWidgets.QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Sidebar
+        self._setup_sidebar()
+        self._setup_splitter()
+
+        self.populate_chat_list()
+
+    def _setup_sidebar(self):
         self.sidebar_widget = QtWidgets.QWidget()
         self.sidebar_layout = QtWidgets.QVBoxLayout(self.sidebar_widget)
         self.sidebar_layout.setContentsMargins(10, 10, 10, 10)
         self.sidebar_layout.setSpacing(15)
+
         self.profile_label = QtWidgets.QLabel(f"User: {self.username}")
         self.profile_label.setAlignment(QtCore.Qt.AlignCenter)
         self.sidebar_layout.addWidget(self.profile_label)
+
         self.new_chat_button = QtWidgets.QPushButton("New Chat")
         self.settings_button = QtWidgets.QPushButton("Settings")
         self.sidebar_layout.addWidget(self.new_chat_button)
         self.sidebar_layout.addWidget(self.settings_button)
         self.sidebar_layout.addStretch()
+
         self.main_layout.addWidget(self.sidebar_widget, 0)
 
-        # Splitter for chat list and chat area
+    def _setup_splitter(self):
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.main_layout.addWidget(self.splitter, 1)
 
-        # Chat list
+        self._setup_chat_list()
+        self._setup_chat_area()
+
+    def _setup_chat_list(self):
         self.chat_list = QtWidgets.QListWidget()
         self.chat_list.setMaximumWidth(280)
         self.chat_list.itemClicked.connect(self.load_chat)
         self.splitter.addWidget(self.chat_list)
 
-        # Chat area widget
+    def _setup_chat_area(self):
         self.chat_widget = QtWidgets.QWidget()
         self.chat_layout = QtWidgets.QVBoxLayout(self.chat_widget)
         self.chat_layout.setContentsMargins(16, 16, 16, 16)
         self.splitter.addWidget(self.chat_widget)
 
-        # Chat header
+        self._setup_chat_header()
+        self._setup_chat_display()
+        self._setup_input_widget()
+
+    def _setup_chat_header(self):
         self.chat_header = QtWidgets.QLabel("Select a chat")
         self.chat_header.setObjectName("chatHeader")
         self.chat_header.setStyleSheet("font-size: 18px; font-weight: bold;")
         self.chat_layout.addWidget(self.chat_header)
 
-        # Chat area (scrollable)
+    def _setup_chat_display(self):
         self.chat_area = QtWidgets.QTextEdit()
         self.chat_area.setReadOnly(True)
         self.chat_area.setStyleSheet("background: #f5f5f5; border-radius: 8px; padding: 8px;")
         self.chat_layout.addWidget(self.chat_area, 1)
 
-        # Input widget
+    def _setup_input_widget(self):
         self.input_widget = QtWidgets.QWidget()
         self.input_layout = QtWidgets.QHBoxLayout(self.input_widget)
         self.input_layout.setContentsMargins(0, 0, 0, 0)
+
         self.message_line_edit = QtWidgets.QLineEdit()
         self.message_line_edit.setPlaceholderText("Type a message...")
         self.message_line_edit.returnPressed.connect(self.send_message)
+        self.message_line_edit.textChanged.connect(self.toggle_send_button)
+
         self.send_button = QtWidgets.QPushButton("Send")
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self.send_message)
+
         self.input_layout.addWidget(self.message_line_edit, 1)
         self.input_layout.addWidget(self.send_button)
         self.chat_layout.addWidget(self.input_widget)
-
-        self.message_line_edit.textChanged.connect(self.toggle_send_button)
-
-        self.populate_chat_list()
-
-
-#    def toggle_theme(self):
-#        from theme import get_palette, set_palette, refresh_theme
-#        current = get_palette()
-#        new_theme = "dark" if current == "light" else "light"
-#        set_palette(new_theme)
-#        refresh_theme(self)
-
 
     def populate_chat_list(self):
         self.chat_list.clear()
