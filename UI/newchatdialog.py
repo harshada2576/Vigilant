@@ -11,6 +11,7 @@ class NewChatDialog(QDialog):
         layout = QVBoxLayout()
 
         self.group_checkbox = QCheckBox("Group Chat.")
+        self.group_checkbox.setChecked(True)
         self.group_checkbox.stateChanged.connect(self.toggle_group_fields)
         layout.addWidget(self.group_checkbox)
 
