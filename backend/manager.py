@@ -39,20 +39,32 @@ class Manager:
 
         return self.cur.fetchall()
 
-    def create_conversation(self, user_ids, name, is_group=False):
-        admin_id = user_id if is_group else None
+    def create_conversation(self, user_names, conversation_name=None, is_group=False):
+        admin_id = self.user_id if is_group else None
+        user_ids = []
+        for name in user_names:
+            self.cur.execute("""
+                SELECT id FROM users WHERE username = ?
+            """, (name,))
+            result = self.cur.fetchone()
+            if not result:
+                return {"success": False, "message": f"User :{name}: not in database."}
+            else:
+                user_ids.append(result[0])
+
         self.cur.execute("""
             INSERT INTO conversations (name, is_group, admin_id) VALUES (?,?,?)
-        """, (name, is_group, admin_id))
+        """, (conversation_name, is_group, admin_id))
         conversation_id = self.cur.lastrowid
 
+        user_ids.append(self.user_id)
         for uid in user_ids:
             self.cur.execute("""
                 INSERT INTO participants (user_id, conversation_id) VALUES (?,?)
             """, (uid, conversation_id))
 
         self.conn.commit()
-        return conversation_id
+        return {"success": True, "message": conversation_id}
 
     def update_last_read(self, user_id, conversation_id, message_id):
         self.cur.execute("""

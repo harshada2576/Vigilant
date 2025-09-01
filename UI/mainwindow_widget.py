@@ -1,5 +1,6 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
 import UI.theme as theme
+import UI.newchatdialog as ncd
 from backend.manager import Manager
 
 
@@ -39,6 +40,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.new_chat_button = QtWidgets.QPushButton("New Chat")
         self.settings_button = QtWidgets.QPushButton("Settings")
+        self.new_chat_button.clicked.connect(self.new_chat)
+
         self.sidebar_layout.addWidget(self.new_chat_button)
         self.sidebar_layout.addWidget(self.settings_button)
         self.sidebar_layout.addStretch()
@@ -97,6 +100,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_layout.addWidget(self.message_line_edit, 1)
         self.input_layout.addWidget(self.send_button)
         self.chat_layout.addWidget(self.input_widget)
+
+    def new_chat(self):
+        dialog = ncd.NewChatDialog()
+        if dialog.exec():
+            is_group, conversation_name, user_names = dialog.get_info()
+            print(f"[DEBUG] Creating conversation: group={is_group}, name={conversation_name}, users={user_names}")
+            result = self.manager.create_conversation(user_names, conversation_name, is_group)
+            print("[DEBUG] create_conversation result:", result)            
+            self.populate_chat_list()
 
     def populate_chat_list(self):
         self.chat_list.clear()

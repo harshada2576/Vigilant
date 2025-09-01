@@ -46,6 +46,8 @@ class LoginWidget(QtWidgets.QWidget):
 
         self.login_button = QtWidgets.QPushButton("Login")
         self.login_button.setFixedHeight(40)
+        self.username_input.returnPressed.connect(self.on_login_clicked)
+        self.password_input.returnPressed.connect(self.on_login_clicked)
         self.login_button.clicked.connect(self.on_login_clicked)
         layout.addWidget(self.login_button, alignment=QtCore.Qt.AlignCenter)
 
