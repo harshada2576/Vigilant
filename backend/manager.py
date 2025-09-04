@@ -1,10 +1,12 @@
+# change to work with token instead of username
+
 import sqlite3
 
 DB_path = "cipherlink.db"
 
 class Manager:
-    def __init__(self, username, db_path = DB_path):
-        self.username = username
+    def __init__(self, token, db_path = DB_path):
+        self.token = token
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()

@@ -73,7 +73,7 @@ class LoginWidget(QtWidgets.QWidget):
         link = verify_user(username, password)
         if link["success"]:
             self.status_label.setText(link["message"])
-            self.login_success.emit(username)
+            self.login_success.emit(link["token"])
             self.reset()
         else:
             # needs dynamic error handling through status_label

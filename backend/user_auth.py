@@ -1,9 +1,14 @@
 import bcrypt
 import os
 import sqlite3
-
+import secrets
+from datetime import datetime, timedelta
+import backend.session_storage as helper
 
 DB_path = "cipherlink.db"
+
+def generate_session_token():
+    return secrets.token_urlsafe(32)
 
 def hash_password(password):
     """Hashes a password using bcrypt."""
@@ -57,7 +62,7 @@ def verify_user(username, password, db_path=DB_path):
         cur = conn.cursor()
 
         cur.execute("""
-            SELECT password_hash FROM users WHERE username = ?
+            SELECT id, display_name, password_hash FROM users WHERE username = ?
         """, (username,))
         result = cur.fetchone()
         conn.close()
@@ -65,12 +70,37 @@ def verify_user(username, password, db_path=DB_path):
         if not result:
             return {"success": False, "message": "Invalid username or password."}
 
-        stored_hash = result[0]
+        stored_hash = result[2]
     
-        if bcrypt.checkpw(password.encode('utf-8'), stored_hash):  
-            return {"success": True, "message": f"Welcome Back, {username}!"}
+        if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
+            user_id = result[0]
+            token = create_session(user_id)
+            helper.save_encrypted_session(token)
+            return {"success": True, "message": f"Welcome Back, {result[1]}!", "token": token}
         else: 
             return {"success": False, "message": "Invalid username or password."}
 
     except Exception as e:
         return {"success": False, "message": f"login error: {str(e)}"}
+
+def create_session(user_id, duration_minutes=60):
+    token = generate_session_token()
+    expires_at = (datetime.utcnow() + timedelta(minutes=duration_minutes)).isoformat()
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?,?,?)
+    """, (user_id, session_token, expires_at))
+    conn.commit()
+    return token
+
+def validate_session_token(token):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT users.id, users.username FROM sessions JOIN users ON sessions.user_id = users.id
+        WHERE session_token = ? AND expires_at > CURRENT_TIMESTAMP
+    """, (token,))
+    return cur.fetchone()

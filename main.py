@@ -32,22 +32,22 @@ class LinkApp(QtWidgets.QMainWindow):
         self.loading_widget.loading_finished.connect(self.on_loading_finished)
 
         self.stack.setCurrentWidget(self.login_widget)
-        self.username = None  # Track authenticated user
+        self.token = None  # Track authenticated user
 
-    def on_login_success(self, username):
+    def on_login_success(self, token):
         # Only proceed if authentication is successful
-        self.username = username
+        self.token = token
         self.on_loading_finished()
 #        self.stack.setCurrentWidget(self.loading_widget)
 #        self.loading_widget.start_loading()
 
     def on_loading_finished(self):
-        if self.username is None:
+        if self.token is None:
             # Prevent access if not authenticated
             self.stack.setCurrentWidget(self.login_widget)
             return
         if self.mainwindow_widget is None:
-            self.mainwindow_widget = MainWindow(self.username)
+            self.mainwindow_widget = MainWindow(self.token)
             self.stack.addWidget(self.mainwindow_widget)
         self.stack.setCurrentWidget(self.mainwindow_widget)
         self.resize(900, 600)  
