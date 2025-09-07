@@ -4,15 +4,28 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 import UI.theme as theme
 import UI.newchatdialog as ncd
 from backend.manager import Manager
+from backend.exceptions import SessionExpiredError
 
 
 class MainWindow(QtWidgets.QMainWindow):
+    session_expired = QtCore.pyqtSignal()
+
     def __init__(self, token, parent=None):
         super().__init__()
         self.token = token
-        self.manager = Manager(token)
+        try:
+            self.manager = Manager(token)
+        except SessionExpiredError:
+            QtWidgets.QMessageBox.warning(self, "Session Expired", "Your session has expired. Please log in again.")
+            clear_session()
+            self.session_expired.emit()
         self.current_chat_id = None
+        self.get_user_info_or_preference_or_similiar_forthings_like_themesettign_displayname_etc()
         self.setup_ui()
+
+    def get_user_info_or_preference_or_similiar_forthings_like_themesettign_displayname_etc(self):
+        self.display_name = "placeholder"
+        pass
 
     def setup_ui(self):
         self.setWindowTitle("CipherLink Messenger")
@@ -36,7 +49,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar_layout.setContentsMargins(10, 10, 10, 10)
         self.sidebar_layout.setSpacing(15)
 
-        self.profile_label = QtWidgets.QLabel(f"User: <add userdisplayname here>")
+        self.profile_label = QtWidgets.QLabel(f"User: {self.display_name}")
         self.profile_label.setAlignment(QtCore.Qt.AlignCenter)
         self.sidebar_layout.addWidget(self.profile_label)
 
@@ -143,11 +156,16 @@ class MainWindow(QtWidgets.QMainWindow):
         message = self.message_line_edit.text().strip()
         if not message or not self.current_chat_id:
             return
-        self.manager.send_message(self.current_chat_id, self.manager.user_id, message)
+        self.manager.send_message(self.current_chat_id, message)
         self.message_line_edit.clear()
         self.load_chat(self.chat_list.currentItem())
 
     def toggle_send_button(self):
         self.send_button.setEnabled(bool(self.message_line_edit.text().strip()))
+
+    def logout_and_redirect_to_login(self):
+        from backend.session import clear_session
+        clear_session()
+        self.close()
 
 

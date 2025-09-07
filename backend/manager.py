@@ -3,25 +3,27 @@
 
 import sqlite3
 from cryptography.fernet import Fernet
-import backend.session_storage as helper
+import backend.session as helper
+from backend.exceptions import SessionExpiredError
 from backend.user_auth import validate_session_token
 
 DB_path = "cipherlink.db"
 
 class Manager:
     def __init__(self, token, db_path = DB_path):
+        self.user = validate_session_token(token)
+        if not self.user:
+            raise SessionExpiredError("Invalid or Expired Session.")
+
+        self.user_id = self.user[0]
         self.token = token
+
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
         self.conn.execute("PRAGMA foreign_keys = ON")
-        
-        user_data = validate_session_token(token)
-        if not user_data:
-            raise Exception("invalid or expired session")
-        self.user_id = user_data[0]
 
-    def send_message(self, conversation_id, sender_id, content):
+    def send_message(self, conversation_id, content):
         key = helper.get_or_create_key()        # using the key stored for password for messages
         cipher = Fernet(key)
 
@@ -29,7 +31,7 @@ class Manager:
 
         self.cur.execute("""
             INSERT INTO messages (conversation_id, sender_id, content) VALUES (?,?,?)
-        """, (conversation_id, sender_id, message))
+        """, (conversation_id, user_id, message))
 
         self.cur.execute("""
             UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?

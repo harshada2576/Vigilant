@@ -4,7 +4,7 @@ import os
 import sqlite3
 import secrets
 from datetime import datetime, timedelta
-import backend.session_storage as helper
+import backend.session as helper
 
 DB_path = "cipherlink.db"
 
@@ -24,7 +24,7 @@ def get_connection(db_path=DB_path):
         return None
 
 
-def load_user(user):
+def load_user():
     token = helper.load_encrypted_session()
     if not token:
         return None
@@ -33,7 +33,7 @@ def load_user(user):
         return {"id": result[0], "username": result[1], "token": token}
     return None
 
-def register_user(username, password):
+def register_user(username, password, display_name):
     if not username or not password:
         return {"success": False, "message": "Username and password cannot be empty."}
     try: 
@@ -43,17 +43,17 @@ def register_user(username, password):
         password_hash = hash_password(password)
 
         cur.execute("""
-            INSERT INTO users (username, password_hash)
-            VALUES (?,?)
-        """, (username, password_hash))
+            INSERT INTO users (username, password_hash, display_name)
+            VALUES (?,?,?)
+        """, (username, password_hash, display_name))
 
         conn.commit()
         conn.close()
-        return {"success": True, "message": "Username: {username} registered successfully."}
+        return {"success": True, "message": "User {display_name} registered successfully."}
     
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed: users.username" in str(e):
-            return {"success": False, "message": "Username: {username} is already taken."}
+            return {"success": False, "message": "Username is already taken."}
         return {"success": False, "message": f"Database Integrity Error: {str(e)}"}
 
     except Exception as e:
@@ -82,7 +82,7 @@ def verify_user(username, password, db_path=DB_path):
         if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
             user_id = result[0]
             token = create_session(user_id)
-            helper.save_encrypted_session(token)
+            helper.store_encrypted_session(token)
             return {"success": True, "message": f"Welcome Back, {result[1]}!", "token": token}
         else: 
             return {"success": False, "message": "Invalid username or password."}
@@ -107,7 +107,7 @@ def validate_session_token(token):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT users.id, users.username FROM sessions JOIN users ON sessions.user_id = users.id
+        SELECT users.id FROM sessions JOIN users ON sessions.user_id = users.id
         WHERE session_token = ? AND expires_at > CURRENT_TIMESTAMP
     """, (token,))
     return cur.fetchone()
