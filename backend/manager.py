@@ -1,6 +1,10 @@
+#                                                        backend / manager.py
 # change to work with token instead of username
 
 import sqlite3
+from cryptography.fernet import Fernet
+import backend.session_storage as helper
+from backend.user_auth import validate_session_token
 
 DB_path = "cipherlink.db"
 
@@ -12,15 +16,20 @@ class Manager:
         self.cur = self.conn.cursor()
         self.conn.execute("PRAGMA foreign_keys = ON")
         
-        self.cur.execute("""
-            SELECT id FROM users WHERE username = ?
-        """, (username,))
-        self.user_id = self.cur.fetchone()['id']
+        user_data = validate_session_token(token)
+        if not user_data:
+            raise Exception("invalid or expired session")
+        self.user_id = user_data[0]
 
     def send_message(self, conversation_id, sender_id, content):
+        key = helper.get_or_create_key()        # using the key stored for password for messages
+        cipher = Fernet(key)
+
+        message = cipher.encrypt(content.encode('utf-8'))
+
         self.cur.execute("""
             INSERT INTO messages (conversation_id, sender_id, content) VALUES (?,?,?)
-        """, (conversation_id, sender_id, content))
+        """, (conversation_id, sender_id, message))
 
         self.cur.execute("""
             UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -28,11 +37,21 @@ class Manager:
         self.conn.commit()
 
     def get_messages(self, conversation_id, limit=50):
+        key = helper.get_or_create_key()        # using the key stored for password for messages
+        cipher = Fernet(key)
+
         self.cur.execute("""
             SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?
         """, (conversation_id, limit))
 
-        return self.cur.fetchall()
+        dataset = self.cur.fetchall()
+        result = []
+        for row in dataset:
+            data = dict(row)
+            data['content'] = cipher.decrypt(data['content']).decode('utf-8')
+            result.append(data)
+
+        return result
 
     def get_conversations(self):
         self.cur.execute("""

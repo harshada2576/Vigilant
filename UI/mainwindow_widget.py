@@ -1,3 +1,5 @@
+#                                                      UI / mainwindow_widget.py
+
 from PyQt5 import QtWidgets, QtGui, QtCore
 import UI.theme as theme
 import UI.newchatdialog as ncd
@@ -5,10 +7,10 @@ from backend.manager import Manager
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, username, parent=None):
+    def __init__(self, token, parent=None):
         super().__init__()
-        self.username = username
-        self.manager = Manager(username)
+        self.token = token
+        self.manager = Manager(token)
         self.current_chat_id = None
         self.setup_ui()
 
@@ -34,7 +36,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar_layout.setContentsMargins(10, 10, 10, 10)
         self.sidebar_layout.setSpacing(15)
 
-        self.profile_label = QtWidgets.QLabel(f"User: {self.username}")
+        self.profile_label = QtWidgets.QLabel(f"User: <add userdisplayname here>")
         self.profile_label.setAlignment(QtCore.Qt.AlignCenter)
         self.sidebar_layout.addWidget(self.profile_label)
 

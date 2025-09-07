@@ -1,3 +1,4 @@
+#                                                        Backend / user_auth.py
 import bcrypt
 import os
 import sqlite3
@@ -24,7 +25,13 @@ def get_connection(db_path=DB_path):
 
 
 def load_user(user):
-    pass
+    token = helper.load_encrypted_session()
+    if not token:
+        return None
+    result = validate_session_token(token)
+    if result:
+        return {"id": result[0], "username": result[1], "token": token}
+    return None
 
 def register_user(username, password):
     if not username or not password:
@@ -84,7 +91,7 @@ def verify_user(username, password, db_path=DB_path):
         return {"success": False, "message": f"login error: {str(e)}"}
 
 def create_session(user_id, duration_minutes=60):
-    token = generate_session_token()
+    session_token = generate_session_token()
     expires_at = (datetime.utcnow() + timedelta(minutes=duration_minutes)).isoformat()
 
     conn = get_connection()
@@ -94,7 +101,7 @@ def create_session(user_id, duration_minutes=60):
         INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?,?,?)
     """, (user_id, session_token, expires_at))
     conn.commit()
-    return token
+    return session_token
 
 def validate_session_token(token):
     conn = get_connection()

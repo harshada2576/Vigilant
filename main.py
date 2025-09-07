@@ -34,6 +34,14 @@ class LinkApp(QtWidgets.QMainWindow):
         self.stack.setCurrentWidget(self.login_widget)
         self.token = None  # Track authenticated user
 
+# to be implemented
+# user = user_auth.load_user()
+# if user:
+#    launch_mainwindow(user)
+# else:
+#    show_login_window()
+
+
     def on_login_success(self, token):
         # Only proceed if authentication is successful
         self.token = token
