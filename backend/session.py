@@ -4,8 +4,11 @@ import os
 import keyring                              # OS keyring (or operating system keyring) is a secure way to store sensitive information, like passwords, tokens, or cookies, using the native credential storage system of the operating system instead of saving them in plain-text local files.
 from cryptography.fernet import Fernet
 
+# this is for when we make it available for multiple users in same machine
+local_user_id = 1
+
 SERVICE_NAME = "CipherLinkApp"
-KEY_NAME = "encryption_key"
+KEY_NAME = "encryption_key_{local_user_id}"                         # to have each user in same machine have different logins and not share saem encryption key
 SESSION_ID = "user_session"
 
 

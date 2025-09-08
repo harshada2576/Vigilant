@@ -31,7 +31,7 @@ class Manager:
 
         self.cur.execute("""
             INSERT INTO messages (conversation_id, sender_id, content) VALUES (?,?,?)
-        """, (conversation_id, user_id, message))
+        """, (conversation_id, self.user_id, message))
 
         self.cur.execute("""
             UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -94,6 +94,14 @@ class Manager:
             UPDATE participants SET last_read_message_id = ? WHERE user_id = ? AND conversation_id = ?
         """, (message_id, user_id, conversation_id))
         self.conn.commit()
+
+    def logout_user(self):
+        self.cur.execute("""
+            DELETE FROM sessions WHERE session_token = ?
+        """, (token,))
+        self.conn.commit()
+        
+        helper.clear_session()
 
     def close(self):
         self.conn.close()

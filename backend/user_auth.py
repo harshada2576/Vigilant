@@ -20,7 +20,7 @@ def get_connection(db_path=DB_path):
     if os.path.exists(db_path):
         return sqlite3.connect(db_path)
     else:
-        print(f"Databse file : {path} : does not exists.")
+        print(f"Databse file : {db_path} : does not exists.")
         return None
 
 
@@ -49,7 +49,7 @@ def register_user(username, password, display_name):
 
         conn.commit()
         conn.close()
-        return {"success": True, "message": "User {display_name} registered successfully."}
+        return {"success": True, "message": f"User {display_name} registered successfully."}
     
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed: users.username" in str(e):
@@ -111,3 +111,14 @@ def validate_session_token(token):
         WHERE session_token = ? AND expires_at > CURRENT_TIMESTAMP
     """, (token,))
     return cur.fetchone()
+
+def logout_user():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        DELETE FROM sessions WHERE session_token = ?
+    """, (token,))
+    conn.commit()
+
+    helper.clear_session()
+
