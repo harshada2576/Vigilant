@@ -174,4 +174,35 @@ For real-time:
 
 ---
 
+## 🔤 Languages & Technologies Used (Current & Suggested)
+
+| Layer                  | Language/Tech                         | Why it's Used                                                           | Alternatives                             |
+| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------- |
+| 🧠 Backend logic       | **Python**                            | High readability, mature crypto/libs, great for prototyping and scaling | Node.js, Go, Rust                        |
+| 🔐 Encryption          | **Python (`cryptography`, `bcrypt`)** | Strong, widely-used, secure implementations                             | Rust (ring), Go (crypto), libsodium      |
+| 🗃️ Database           | **SQLite**                            | Simple, file-based DB, no server needed, good for development           | PostgreSQL (for production), MySQL       |
+| 🔌 API (Recommended)   | **FastAPI**                           | Async-ready, built-in validation, type safety, Swagger docs             | Flask, Django REST, Express.js           |
+| 📦 Packaging/Container | **Docker**                            | Environment isolation, reproducibility                                  | Vagrant, Podman                          |
+| 📋 Testing             | **pytest**                            | Clean syntax, widely adopted                                            | unittest, nose2, PyTest-bdd              |
+| 🌍 Deployment          | **Uvicorn + FastAPI + Docker**        | Production-capable Python async stack                                   | Gunicorn + Flask, Deno (for JS)          |
+| 🔐 Secrets storage     | **Keyring**                           | OS-level secret storage, no hardcoded secrets                           | HashiCorp Vault, AWS KMS, dotenv         |
+| (Optional) UI Frontend | React, Next.js, Flutter               | React/Next = web, Flutter = cross-platform native                       | Vue.js, Svelte, Swift/Kotlin native apps |
+
+---
+
+# 🎓 Skills Gained from This Project
+
+| Area                     | Experience You'll Build                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| ✅ Auth & Sessions        | How real login systems work (token-based)                               |
+| ✅ Encryption             | Practical secure message storage                                        |
+| ✅ Database Schema Design | Users, sessions, messages, relationships                                |
+| ✅ RESTful API Design     | Stateless comms between frontend/backend                                |
+| ✅ Secrets Handling       | Key management, encryption hygiene                                      |
+| ✅ Error Handling         | Graceful errors and security exceptions                                 |
+| ✅ DevOps                 | Docker, environment configs, deployability                              |
+| ✅ Security Principles    | You’re already using bcrypt, Fernet, sessions, CSRF protection concepts |
+
+---
+
 
