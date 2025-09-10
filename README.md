@@ -1,3 +1,8 @@
+Gotcha! Here's a **full updated README** for **Cipher Link** with your exact project structure tree and detailed descriptions for each file/folder — super clear and professional:
+
+---
+
+```markdown
 # Cipher Link
 
 A modular, secure messaging application.
@@ -6,121 +11,153 @@ A modular, secure messaging application.
 
 ## Project Overview
 
-Cipher Link is a secure, extensible messaging platform built with modularity and scalability in mind. The project now features robust password hashing, normalized database storage (SQLite), and a clear separation between backend logic and UI components. It is designed for future enhancements such as real-time communication, advanced encryption, and group chat support.
-
----
-
-## Collaboration
-
-| Contributors |
-|--------------|
-| Ahmed        |
-| Avhad        |
+Cipher Link is a secure, extensible messaging platform built with modularity and scalability in mind. The backend leverages FastAPI, SQLite, and robust encryption, while the UI is designed for future enhancements such as real-time messaging and group chats.
 
 ---
 
 ## Project Structure
 
-| Module/Folder      | Purpose/Description                                      |
-|--------------------|---------------------------------------------------------|
-| `main.py`          | Main entry point; application bootstrapper              |
-| `backend/`         | Core backend logic: database, authentication, chat      |
-| `UI/`              | All UI components and widgets                           |
-| `cipherlink.db`    | SQLite database file (auto-created/managed)             |
-| `requirements.txt` | Python dependencies                                     |
-| `README.md`        | Project documentation                                   |
-| `migrations/`      | (Optional) Data migration scripts                       |
-| `stash/`           | (Legacy) Old message storage for migration/testing      |
+```
+
+.
+├── app.log                    # Application logs for debugging and monitoring
+├── backend                    # Core backend logic and services
+│   ├── auth.py               # Authentication handlers and utilities
+│   ├── config.py             # Configuration management (env vars, constants)
+│   ├── exceptions.py         # Custom exceptions and error handling
+│   ├── init\_db.py            # Database initialization and schema setup
+│   ├── **init**.py           # Backend package initializer
+│   ├── manager.py            # Business logic for user/conversation management
+│   ├── schema.sql            # SQL schema for database structure
+│   ├── session.py            # Session management and token handling
+│   └── user\_auth.py          # User registration and login processes
+├── cipherlink.db             # SQLite database file (auto-generated)
+├── Dockerfile                # Docker build configuration for containerization
+├── docs                      # Documentation files and roadmaps
+│   ├── analsis.md            # Project analysis notes
+│   ├── brief-overview\.md     # High-level overview documentation
+│   ├── critical\_issues.md    # Known issues and blockers
+│   ├── roadmap2.md           # Project roadmap and next steps (version 2)
+│   └── roadmap.md            # Initial roadmap and planning
+├── main\_api.py               # FastAPI application instance and API endpoints
+├── main.py                   # Application entry point, bootstraps the system
+├── README.md                 # Project documentation (this file)
+├── requirements.txt          # Python package dependencies
+├── tests                     # Unit and integration tests
+│   ├── api.py                # API endpoint tests
+│   ├── clearsession.py       # Session clearing and logout tests
+│   ├── database.py           # Database functionality tests
+│   └── **init**.py           # Tests package initializer
+└── UI                        # User Interface components and widgets (PyQt5)
+├── **init**.py           # UI package initializer
+├── loading\_widget.py     # Loading spinner widget
+├── login\_widget.py       # Login form widget
+├── mainwindow\_widget.py  # Main application window
+├── newchatdialog.py      # Dialog for starting new chats
+└── theme.py              # Styling and UI theming utilities
+
+````
 
 ---
 
-## Current Status
-
-- **User authentication**: Secure, using hashed passwords and SQLite.
-- **Chat storage**: Normalized, scalable database schema for users, conversations, participants, and messages.
-- **UI**: Modular widgets for login, main window, and theming.
-- **Data migration**: Scripts available to import legacy chat data from `stash/`.
-- **Project structure**: Modular, maintainable, and ready for further development.
-
----
-
-## Roadmap (Prioritized)
-
-1. **Integrate Chat Logic with UI**
-   - Seamless sending, receiving, and displaying of messages in the GUI.
-2. **Implement Real-Time Messaging**
-   - Add networking/server logic for live chat.
-3. **Finalize and Test End-to-End Encryption**
-   - Ensure all messages are securely encrypted/decrypted.
-4. **Enhance Persistence**
-   - Robust multi-user and multi-session support.
-5. **Improve UI/UX**
-   - Usability, accessibility, and visual polish.
-6. **Add Unit and Integration Tests**
-   - Especially for authentication, encryption, and messaging.
-7. **Update Documentation**
-   - Keep README and code comments up to date.
-8. **Extend Group Chat and Admin Features**
-   - Roles, group management, and advanced permissions.
-9. **Improve Server-Side Architecture**
-   - Prepare for distributed or cloud deployment.
-10. **Prepare for Public Release**
-    - Security audit, packaging, and deployment scripts.
-
----
-
-## Getting Started
+## Setup Instructions
 
 1. **Clone the repository:**
+
    ```bash
-   git clone https://github.com/seucra/CipherLink.git
-   cd CipherLink
+   git clone https://github.com/yourusername/cipherlink.git
+   cd cipherlink
+````
+
+2. **Create and activate a virtual environment (recommended):**
+
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # Windows: venv\Scripts\activate
    ```
 
-2. **Install dependencies:**
+3. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Initialize the SQLite database:**
+4. **Run the application:**
+
    ```bash
-   python3 backend/init_db.py
+   uvicorn main_api:app --reload
    ```
 
-4. **(Optional) Import legacy chat data:**
-   ```bash
-   python3 migrations/import_stash.py
-   ```
+5. **Access API docs:**
 
-5. **Run the application:**
-   ```bash
-   python3 main.py
-   ```
+   Open [http://localhost:8000/docs](http://localhost:8000/docs) for interactive Swagger UI.
 
 ---
 
-## Database Initialization
+## Requirements
 
-Cipher Link uses an SQLite database for storing users, conversations, participants, and messages. The schema is defined in `backend/schema.sql`. Running `init_db.py` will create the database and necessary tables automatically.
+Python dependencies are maintained in `requirements.txt`. Some key packages include:
 
-To reset or create a fresh database, rerun:
+* `bcrypt` — secure password hashing
+* `fastapi` — web framework for API
+* `pydantic` — data validation
+* `cryptography` — encryption utilities
+* `python-dotenv` — environment variable management
+* `PyQt5` — UI framework
+
+---
+
+## run docker
+
+install docker 
 
 ```bash
-python3 backend/init_db.py
+sudo apt install docker.io
+```
+
+build
+```bash
+sudo docker build -t cipherlink-backend .
+```
+
+run
+```bash
+sudo docker run -d -p 8000:8000 --name cipherlink-app cipherlink-backend
 ```
 
 ---
 
-## Dependencies
+## Testing
 
-- Python 3.8+
-- [cryptography](https://pypi.org/project/cryptography/)
-- [PyCryptodome](https://pypi.org/project/pycryptodome/)
+Tests are located in the `tests/` folder. Run them with:
 
-All dependencies are listed in `requirements.txt`.
+```bash
+pytest tests/
+```
 
 ---
 
+## Future Improvements
 
-> **Status:** Active development – core architecture in place, major features being integrated.
+* Complete message CRUD endpoints with encryption/decryption
+* Implement session refresh tokens and secure session management
+* Add real-time messaging with WebSocket support
+* Migrate to a production-grade database (e.g., PostgreSQL)
+* Dockerize fully and deploy to cloud infrastructure
+
+---
+
+## Contributors
+
+| Name  |
+| ----- |
+| Ahmed |
+| Avhad |
+
+---
+
+For questions or collaboration, feel free to reach out to the contributors!
+
+---
+
 

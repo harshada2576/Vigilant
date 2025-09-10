@@ -43,7 +43,7 @@ class Manager:
         cipher = Fernet(key)
 
         self.cur.execute("""
-            SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?
+            SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp  LIMIT ?
         """, (conversation_id, limit))
 
         dataset = self.cur.fetchall()
@@ -79,11 +79,12 @@ class Manager:
             INSERT INTO conversations (name, is_group, admin_id) VALUES (?,?,?)
         """, (conversation_name, is_group, admin_id))
         conversation_id = self.cur.lastrowid
-
-        user_ids.append(self.user_id)
+        
+        if self.user_id not in user_ids:
+            user_ids.append(self.user_id)
         for uid in user_ids:
             self.cur.execute("""
-                INSERT INTO participants (user_id, conversation_id) VALUES (?,?)
+                INSERT OR IGNORE INTO participants (user_id, conversation_id) VALUES (?,?)
             """, (uid, conversation_id))
 
         self.conn.commit()

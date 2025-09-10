@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 import logging
 from backend import user_auth
+from backend.manager import Manager
 from backend.auth import get_current_user
 
 app = FastAPI(title="CipherLink API")
@@ -31,7 +32,7 @@ class LoginRequest(BaseModel):
 # Register endpoint
 @app.post("/register")
 def register_user(request: RegisterRequest):
-    logger.info(f"Register attempt for {requset.username}")
+    logger.info(f"Register attempt for {request.username}")
     result = user_auth.register_user(
         request.username,
         request.password,
@@ -44,7 +45,7 @@ def register_user(request: RegisterRequest):
 # (key) login endpoint
 @app.post("/login")
 def login_user(request: LoginRequest):
-    logger.info(f"Login attempt for {requset.username}")
+    logger.info(f"Login attempt for {request.username}")
     result = user_auth.verify_user(
         request.username,
         request.password
@@ -75,7 +76,7 @@ def create_conversation(
     )
     manager.close()
     if not result["success"]:
-        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=result["message"])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result["message"])
     return result
 
 @app.get("/get_conversation")
@@ -103,14 +104,14 @@ def send_message(
     current=Depends(get_current_user)
 ):
     logger.info(f"Send message attempt for {current['user']}")
-    manager = Manager(current("token"))
+    manager = Manager(current["token"])
     manager.send_message(conversation_id, content)
     manager.close()
     return {"success": True, "message": "message sent successfully."}
 
 # Let users fetch their info if they’re logged in.
 @app.get("/me")
-def get_current_user(token: str = Header(...)):
+def get_me(token: str = Header(...)):
     user = user_auth.validate_session_token(token)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or Expired Token.")
@@ -120,7 +121,7 @@ def get_current_user(token: str = Header(...)):
 
 # basemodel for update last read
 class UpdateLastReadRequest(BaseModel):
-    coversation_id: int
+    conversation_id: int
     message_id: int
 
 @app.post("/update_last_read")

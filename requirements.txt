@@ -1,4 +1,7 @@
-bcrypt==4.2.0
-keyring==?.?.?
-PyQt5==5.15.10
-pytest==8.2.2
+bcrypt
+uvicorn
+keyring
+fastapi
+pydantic
+python-dotenv
+cryptography

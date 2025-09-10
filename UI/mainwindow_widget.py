@@ -95,7 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _setup_chat_display(self):
         self.chat_area = QtWidgets.QTextEdit()
         self.chat_area.setReadOnly(True)
-        self.chat_area.setStyleSheet("background: #f5f5f5; border-radius: 8px; padding: 8px;")
+        self.chat_area.setStyleSheet("background: #571452; border-radius: 8px; padding: 8px;")
         self.chat_layout.addWidget(self.chat_area, 1)
 
     def _setup_input_widget(self):

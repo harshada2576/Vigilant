@@ -3,7 +3,7 @@ import bcrypt
 import os
 import sqlite3
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from backend.config import DB_PATH
 import backend.session as helper
 import backend.init_db as db
@@ -62,7 +62,7 @@ def register_user(username, password, display_name):
         return {"success": False, "message": f"Unexpected Error: {str(e)}"}
 
 
-def verify_user(username, password, DB_PATH):
+def verify_user(username, password):
     if not username or not password:
         return {"success": False, "message": "Username and password are required."}
     
@@ -94,7 +94,7 @@ def verify_user(username, password, DB_PATH):
 
 def create_session(user_id, duration_minutes=60):
     session_token = generate_session_token()
-    expires_at = (datetime.now(UTC) + timedelta(minutes=duration_minutes)).isoformat()
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)).isoformat()
 
     conn = get_connection()
     cur = conn.cursor()
