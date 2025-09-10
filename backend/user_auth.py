@@ -4,9 +4,11 @@ import os
 import sqlite3
 import secrets
 from datetime import datetime, timedelta
+from backend.config import DB_PATH
 import backend.session as helper
+import backend.init_db as db
 
-DB_path = "cipherlink.db"
+
 
 def generate_session_token():
     return secrets.token_urlsafe(32)
@@ -16,12 +18,12 @@ def hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
 
-def get_connection(db_path=DB_path):
-    if os.path.exists(db_path):
-        return sqlite3.connect(db_path)
+def get_connection():
+    if os.path.exists(DB_PATH):
+        return sqlite3.connect(DB_PATH)
     else:
-        print(f"Databse file : {db_path} : does not exists.")
-        return None
+        db()
+        return get_connection()
 
 
 def load_user():
@@ -30,7 +32,7 @@ def load_user():
         return None
     result = validate_session_token(token)
     if result:
-        return {"id": result[0], "username": result[1], "token": token}
+        return {"id": result[0], "display_name": result[1], "token": token}
     return None
 
 def register_user(username, password, display_name):
@@ -60,7 +62,7 @@ def register_user(username, password, display_name):
         return {"success": False, "message": f"Unexpected Error: {str(e)}"}
 
 
-def verify_user(username, password, db_path=DB_path):
+def verify_user(username, password, DB_PATH):
     if not username or not password:
         return {"success": False, "message": "Username and password are required."}
     
@@ -92,7 +94,7 @@ def verify_user(username, password, db_path=DB_path):
 
 def create_session(user_id, duration_minutes=60):
     session_token = generate_session_token()
-    expires_at = (datetime.utcnow() + timedelta(minutes=duration_minutes)).isoformat()
+    expires_at = (datetime.now(UTC) + timedelta(minutes=duration_minutes)).isoformat()
 
     conn = get_connection()
     cur = conn.cursor()
@@ -107,12 +109,12 @@ def validate_session_token(token):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT users.id FROM sessions JOIN users ON sessions.user_id = users.id
+        SELECT users.id, display_name FROM sessions JOIN users ON sessions.user_id = users.id
         WHERE session_token = ? AND expires_at > CURRENT_TIMESTAMP
     """, (token,))
     return cur.fetchone()
 
-def logout_user():
+def logout_user(token):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""

@@ -98,7 +98,7 @@ class Manager:
     def logout_user(self):
         self.cur.execute("""
             DELETE FROM sessions WHERE session_token = ?
-        """, (token,))
+        """, (self.token,))
         self.conn.commit()
         
         helper.clear_session()
