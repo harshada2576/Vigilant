@@ -1,5 +1,4 @@
-// app.js - CipherLink web client (works with your FastAPI endpoints)
-// Assumes backend at http://localhost:8000 ; change API_URL if different.
+// app.js - CipherLink web client (adapted for backend used in desktop app)
 
 const API_URL = "http://localhost:8000";
 let token = localStorage.getItem("cipher_token") || null;
@@ -51,8 +50,7 @@ function setLoading(stepText, pct){
   loadingProgress.value = pct || loadingProgress.value;
 }
 
-// small wrapper to call backend with token header
-async function apiFetch(path, {method="GET", body=null, qs=null, headers={}} = {}){
+async function apiFetch(path, {method="GET", qs=null, headers={}} = {}){
   let url = API_URL + path;
   if(qs){
     const qp = new URLSearchParams(qs);
@@ -60,10 +58,7 @@ async function apiFetch(path, {method="GET", body=null, qs=null, headers={}} = {
   }
   const opts = { method, headers: { ...headers } };
   if(token) opts.headers["token"] = token;
-  if(body){
-    opts.headers["Content-Type"] = "application/json";
-    opts.body = JSON.stringify(body);
-  }
+
   const res = await fetch(url, opts);
   const contentType = res.headers.get("content-type") || "";
   let data = null;
@@ -88,15 +83,15 @@ async function doLogin(){
   loginStatus.innerText = "";
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
-  if(!username || !password){ loginStatus.innerText = "Please enter both username and password."; return; }
+  if(!username || !password){ 
+    loginStatus.innerText = "Please enter both username and password."; 
+    return; 
+  }
   loginBtn.disabled = true;
 
   try{
-    const res = await fetch(API_URL + "/login", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ username, password })
-    });
+    const url = `${API_URL}/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    const res = await fetch(url, { method: "POST" });
     if(!res.ok){
       const err = await res.json();
       loginStatus.innerText = err.detail || err.message || "Login failed.";
@@ -104,10 +99,9 @@ async function doLogin(){
       return;
     }
     const data = await res.json();
-    if(data.success && data.token){
+    if(data.token){
       token = data.token;
       localStorage.setItem("cipher_token", token);
-      // show loading and then open main UI
       showLoadingSequence(async () => {
         await loadProfileAndConversations();
         showPage("chat");
@@ -118,7 +112,7 @@ async function doLogin(){
     }
   }catch(err){
     console.error("Login error", err);
-    loginStatus.innerText = (err.data && err.data.detail) || "Network or server error.";
+    loginStatus.innerText = "Network or server error.";
     loginBtn.disabled = false;
   }
 }
@@ -127,29 +121,28 @@ async function doRegister(){
   loginStatus.innerText = "";
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
-  if(!username || !password){ loginStatus.innerText = "Please enter both username and password."; return; }
+  if(!username || !password){ 
+    loginStatus.innerText = "Please enter both username and password."; 
+    return; 
+  }
   registerBtn.disabled = true;
   try{
-    const res = await apiFetch("/register", {
-      method: "POST",
-      body: { username, password, display_name: username }
-    });
-    loginStatus.innerText = res.message || "Registered successfully. Now login.";
+    const url = `${API_URL}/register?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    const res = await fetch(url, { method: "POST" });
+    const data = await res.json();
+    loginStatus.innerText = data.message || "Registered successfully. Now login.";
   }catch(err){
     console.error("register err", err);
-    loginStatus.innerText = (err.data && err.data.detail) || (err.data && err.data.message) || "Register error.";
+    loginStatus.innerText = "Register error.";
   }finally{
     registerBtn.disabled = false;
   }
 }
 
-// validate token on load
 async function tryAutoLogin(){
   if(!token) return;
   try{
-    // call /me to confirm token valid
     await apiFetch("/me");
-    // token valid => load UI
     showLoadingSequence(async ()=> {
       await loadProfileAndConversations();
       showPage("chat");
@@ -162,7 +155,7 @@ async function tryAutoLogin(){
   }
 }
 
-// Loading simulation similar to your LoadingWidget
+// Loading sequence
 function showLoadingSequence(callback){
   showPage("loading");
   const steps = [
@@ -193,12 +186,10 @@ messageInput.addEventListener("input", ()=>{ sendBtn.disabled = !messageInput.va
 
 async function loadProfileAndConversations(){
   try{
-    // Fetch minimal user info by /me
     const me = await apiFetch("/me");
-    if(me && me.success){
+    if(me && me.user_id){
       userDisplay.innerText = `User: ${me.user_id}`;
     }
-
     await populateChatList();
   }catch(err){
     console.error("load profile error", err);
@@ -222,7 +213,6 @@ async function populateChatList(){
 }
 
 async function selectConversation(id, name, listItemEl){
-  // highlight
   Array.from(chatList.children).forEach(n=>n.classList.remove("active"));
   if(listItemEl) listItemEl.classList.add("active");
 
@@ -230,7 +220,6 @@ async function selectConversation(id, name, listItemEl){
   chatHeader.innerText = `Chat: ${name || id}`;
   await loadMessages(id);
 
-  // start polling for new messages in selected conversation
   if(pollIntervalHandle) clearInterval(pollIntervalHandle);
   pollIntervalHandle = setInterval(async ()=> {
     await loadMessages(currentConversationId, true);
@@ -244,7 +233,6 @@ async function loadMessages(conversationId, silent=false){
     const messages = res.messages || [];
     renderMessages(messages);
     if(!silent){
-      // scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   }catch(err){
@@ -257,8 +245,6 @@ function renderMessages(messages){
   messages.forEach(m=>{
     const div = document.createElement("div");
     div.classList.add("message");
-    // Determine "me" vs other: sender_id compared to /me user id
-    // We called /me earlier and stored user_id as me.user_id in userDisplay, fallback unknown
     const meText = userDisplay.innerText.replace("User: ","");
     const meId = parseInt(meText) || null;
     const senderId = m.sender_id;
@@ -274,11 +260,11 @@ function renderMessages(messages){
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function escapeHtml(unsafe){
+function escapeHtml(unsafe=""){
   return unsafe
-       .replaceAll("&","&amp;")
-       .replaceAll("<","&lt;")
-       .replaceAll(">","&gt;");
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
 }
 
 async function sendMessage(){
@@ -286,7 +272,6 @@ async function sendMessage(){
   if(!content || !currentConversationId) return;
   sendBtn.disabled = true;
   try{
-    // send via POST with query params as backend expects conversation_id and content as query params
     const qs = new URLSearchParams({ conversation_id: currentConversationId, content }).toString();
     const url = `${API_URL}/send_message?${qs}`;
     const res = await fetch(url, {
@@ -329,20 +314,23 @@ confirmNew.addEventListener("click", async ()=>{
     return;
   }
   try{
-    const res = await apiFetch("/create_conversation", {
+    const url = `${API_URL}/create_conversation`;
+    const res = await fetch(url, {
       method: "POST",
-      body: { user_names: participants, conversation_name, is_group }
+      headers: { "Content-Type": "application/json", "token": token },
+      body: JSON.stringify({ user_names: participants, conversation_name, is_group })
     });
-    if(res.success){
+    const data = await res.json();
+    if(data.success){
       newchatStatus.innerText = "Created. Refreshing...";
       await populateChatList();
       modal.classList.add("hidden");
     } else {
-      newchatStatus.innerText = res.message || "Could not create conversation.";
+      newchatStatus.innerText = data.message || "Could not create conversation.";
     }
   }catch(err){
     console.error("create_conversation error", err);
-    newchatStatus.innerText = (err.data && err.data.detail) || "Error creating conversation.";
+    newchatStatus.innerText = "Error creating conversation.";
   }finally{
     confirmNew.disabled = false;
   }
