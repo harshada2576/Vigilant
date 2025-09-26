@@ -15,9 +15,9 @@ app = FastAPI(title="CipherLink API")
 # Enable CORS (adjust origins for production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # e.g., ["http://localhost:3000"] in production
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],       # allow GET, POST, OPTIONS, etc.
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    display_name: str
+    # CHANGE: Made display_name optional with a default of None
+    display_name: Optional[str] = None 
 
 
 class LoginRequest(BaseModel):
@@ -64,10 +65,14 @@ class UpdateLastReadRequest(BaseModel):
 @app.post("/register")
 def register_user(request: RegisterRequest):
     logger.info(f"Register attempt for {request.username}")
+    
+    # NEW LOGIC: Use the provided display_name or default to the username
+    final_display_name = request.display_name if request.display_name else request.username
+    
     result = user_auth.register_user(
         request.username,
         request.password,
-        request.display_name
+        final_display_name # Used the resolved display name
     )
     if not result["success"]:
         raise HTTPException(

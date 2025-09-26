@@ -20,3 +20,8 @@
 2025-09-10 23:49:27,908 - INFO - Update Last Read attempt for (2, 'Test User')
 2025-09-10 23:51:54,007 - INFO - Update Last Read attempt for (2, 'Test User')
 2025-09-10 23:52:16,803 - INFO - Logout attempt for (2, 'Test User')
+2025-09-26 20:11:17,179 - INFO - Login attempt for test
+2025-09-26 20:11:18,668 - INFO - Register attempt for test
+2025-09-26 20:11:21,040 - INFO - Get conversation attempt for (4, 'test')
+2025-09-26 20:11:40,712 - INFO - Create conversation attempt for (4, 'test')
+2025-09-26 20:11:48,886 - INFO - Create conversation attempt for (4, 'test')

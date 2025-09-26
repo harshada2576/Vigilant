@@ -80,6 +80,7 @@ passwordInput.addEventListener("keypress", (e)=>{ if(e.key==="Enter") doLogin();
 usernameInput.addEventListener("keypress", (e)=>{ if(e.key==="Enter") doLogin(); });
 
 async function doLogin(){
+  // Clear status immediately to remove any previous errors (like [object Object])
   loginStatus.innerText = "";
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
@@ -90,10 +91,21 @@ async function doLogin(){
   loginBtn.disabled = true;
 
   try{
-    const url = `${API_URL}/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-    const res = await fetch(url, { method: "POST" });
+    const url = `${API_URL}/login`; // Corrected URL (no query params)
+    
+    // CORRECTED: Send credentials in a JSON body
+    const res = await fetch(url, { 
+      method: "POST",
+      headers: { "Content-Type": "application/json" }, // Specify JSON content type
+      body: JSON.stringify({ // Stringify the JSON payload
+          username: username,
+          password: password
+      })
+    });
+    
     if(!res.ok){
       const err = await res.json();
+      // Use err.detail for FastAPI 401/400 errors
       loginStatus.innerText = err.detail || err.message || "Login failed.";
       loginBtn.disabled = false;
       return;
@@ -127,9 +139,25 @@ async function doRegister(){
   }
   registerBtn.disabled = true;
   try{
-    const url = `${API_URL}/register?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-    const res = await fetch(url, { method: "POST" });
+    const url = `${API_URL}/register`; // Corrected URL (no query params)
+
+    // CORRECTED: Send registration data in a JSON body.
+    // NOTE: The backend requires `display_name`, which is defaulted to the username here
+    const res = await fetch(url, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            username: username,
+            password: password,
+            display_name: username // Placeholder: consider adding an input field for this
+        })
+    });
+    
     const data = await res.json();
+    if(!res.ok){
+        loginStatus.innerText = data.detail || data.message || "Registration failed.";
+        return;
+    }
     loginStatus.innerText = data.message || "Registered successfully. Now login.";
   }catch(err){
     console.error("register err", err);
@@ -317,6 +345,7 @@ confirmNew.addEventListener("click", async ()=>{
     const url = `${API_URL}/create_conversation`;
     const res = await fetch(url, {
       method: "POST",
+      // This part is already correct, sending a JSON body
       headers: { "Content-Type": "application/json", "token": token },
       body: JSON.stringify({ user_names: participants, conversation_name, is_group })
     });
@@ -326,7 +355,7 @@ confirmNew.addEventListener("click", async ()=>{
       await populateChatList();
       modal.classList.add("hidden");
     } else {
-      newchatStatus.innerText = data.message || "Could not create conversation.";
+      newchatStatus.innerText = data.detail || data.message || "Could not create conversation.";
     }
   }catch(err){
     console.error("create_conversation error", err);
@@ -348,6 +377,9 @@ async function doLogout(){
 }
 
 // --- Boot ---
+// Initialize loginStatus to ensure no leftover '[object Object]' from previous states
+loginStatus.innerText = ""; 
+
 showPage(token ? "loading" : "login");
 if(token){
   tryAutoLogin();
