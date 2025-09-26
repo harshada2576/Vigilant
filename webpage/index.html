@@ -1,97 +1,93 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CipherLink — Web</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CipherLink — Web</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- LOGIN PAGE -->
-  <section id="login-page" class="page active">
-    <div class="card center">
-      <h1 class="title">WELCOME BACK</h1>
+    <section id="login-page" class="page active">
+    <div class="card center">
+      <h1 class="title">WELCOME BACK</h1>
 
-      <div class="form-row">
-        <label>Username</label>
-        <input id="username" placeholder="Enter Your Username" autocomplete="username" />
-      </div>
+      <div class="form-row">
+        <label>Username</label>
+        <input id="username" placeholder="Enter Your Username" autocomplete="username" />
+      </div>
 
-      <div class="form-row">
-        <label>Password</label>
-        <input id="password" type="password" placeholder="Enter Your Password" autocomplete="current-password" />
-      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input id="password" type="password" placeholder="Enter Your Password" autocomplete="current-password" />
+      </div>
 
-      <div class="buttons">
-        <button id="login-btn">Login</button>
-        <button id="register-btn" class="alt">Register</button>
-      </div>
+      <div class="buttons">
+        <button id="login-btn">Login</button>
+        <button id="register-btn" class="alt">Register</button>
+      </div>
 
-      <p id="login-status" class="status"></p>
-    </div>
-  </section>
+      <p id="login-status" class="status"></p>
+    </div>
+  </section>
 
-  <!-- LOADING -->
-  <section id="loading-page" class="page hidden">
-    <div class="card center">
-      <h2 id="loading-label">Connecting to server...</h2>
-      <progress id="loading-progress" max="100" value="0"></progress>
-    </div>
-  </section>
+    <section id="loading-page" class="page hidden">
+    <div class="card center">
+      <h2 id="loading-label">Connecting to server...</h2>
+      <progress id="loading-progress" max="100" value="0"></progress>
+    </div>
+  </section>
 
-  <!-- MAIN CHAT PAGE -->
-  <section id="chat-page" class="page hidden">
-    <div class="app-shell">
-      <aside id="sidebar">
-        <div class="sidebar-top">
-          <h3 id="user-display">User: —</h3>
-          <div class="sidebar-controls">
-            <button id="new-chat-btn">New Chat</button>
-            <button id="logout-btn" class="danger">Logout</button>
-          </div>
-        </div>
+    <section id="chat-page" class="page hidden">
+    <div class="app-shell">
+      <aside id="sidebar">
+        <div class="sidebar-top">
+          <h3 id="user-display">User: —</h3>
+          <div class="sidebar-controls">
+            <button id="new-chat-btn">New Chat</button>
+            <button id="logout-btn" class="danger">Logout</button>
+          </div>
+        </div>
 
-        <div class="conversation-list">
-          <ul id="chat-list"></ul>
-        </div>
-      </aside>
+        <div class="conversation-list">
+          <ul id="chat-list"></ul>
+        </div>
+      </aside>
 
-      <main id="chat-main">
-        <header id="chat-header">Select a chat</header>
+      <main id="chat-main">
+        <header id="chat-header">Select a chat</header>
 
-        <div id="chat-messages" class="messages"></div>
+        <div id="chat-messages" class="messages"></div>
 
-        <footer id="chat-input">
-          <input id="message-input" placeholder="Type a message..." />
-          <button id="send-btn" disabled>Send</button>
-        </footer>
-      </main>
-    </div>
-  </section>
+        <footer id="chat-input">
+          <input id="message-input" placeholder="Type a message..." />
+          <button id="send-btn" disabled>Send</button>
+        </footer>
+      </main>
+    </div>
+  </section>
 
-  <!-- NEW CHAT MODAL -->
-  <div id="newchat-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3>Create Conversation</h3>
-      <label><input type="checkbox" id="is-group" checked /> Group Chat</label>
-      <div class="form-row">
-        <label>Chat Name (if group)</label>
-        <input id="chat-name" />
-      </div>
-      <div class="form-row">
-        <label>Participants (comma separated usernames)</label>
-        <input id="participants" placeholder="alice,bob" />
-      </div>
+    <div id="newchat-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Create Conversation</h3>
+      <label><input type="checkbox" id="is-group" checked /> Group Chat</label>
+      <div class="form-row">
+        <label>Chat Name (if group)</label>
+        <input id="chat-name" />
+      </div>
+      <div class="form-row">
+        <label>Participants (comma separated usernames)</label>
+        <input id="participants" placeholder="alice,bob" />
+      </div>
 
-      <div class="buttons">
-        <button id="confirm-newchat">Confirm</button>
-        <button id="cancel-newchat" class="alt">Cancel</button>
-      </div>
+      <div class="buttons">
+        <button id="confirm-newchat">Confirm</button>
+        <button id="cancel-newchat" class="alt">Cancel</button>
+      </div>
 
-      <p id="newchat-status" class="status"></p>
-    </div>
-  </div>
+      <p id="newchat-status" class="status"></p>
+    </div>
+  </div>
 
-  <script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

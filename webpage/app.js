@@ -1,4 +1,4 @@
-// app.js - CipherLink web client (adapted for backend used in desktop app)
+// app.js - CipherLink web client
 
 const API_URL = "http://localhost:8000";
 let token = localStorage.getItem("cipher_token") || null;
@@ -50,7 +50,7 @@ function setLoading(stepText, pct){
   loadingProgress.value = pct || loadingProgress.value;
 }
 
-async function apiFetch(path, {method="GET", qs=null, headers={}} = {}){
+async function apiFetch(path, {method="GET", qs=null, body=null, headers={}} = {}){
   let url = API_URL + path;
   if(qs){
     const qp = new URLSearchParams(qs);
@@ -58,6 +58,7 @@ async function apiFetch(path, {method="GET", qs=null, headers={}} = {}){
   }
   const opts = { method, headers: { ...headers } };
   if(token) opts.headers["token"] = token;
+  if(body) opts.body = JSON.stringify(body);
 
   const res = await fetch(url, opts);
   const contentType = res.headers.get("content-type") || "";
@@ -80,7 +81,7 @@ passwordInput.addEventListener("keypress", (e)=>{ if(e.key==="Enter") doLogin();
 usernameInput.addEventListener("keypress", (e)=>{ if(e.key==="Enter") doLogin(); });
 
 async function doLogin(){
-  // Clear status immediately to remove any previous errors (like [object Object])
+  // Fix for [object Object] error: clear status immediately
   loginStatus.innerText = "";
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
@@ -91,13 +92,13 @@ async function doLogin(){
   loginBtn.disabled = true;
 
   try{
-    const url = `${API_URL}/login`; // Corrected URL (no query params)
+    const url = `${API_URL}/login`; 
     
     // CORRECTED: Send credentials in a JSON body
     const res = await fetch(url, { 
       method: "POST",
-      headers: { "Content-Type": "application/json" }, // Specify JSON content type
-      body: JSON.stringify({ // Stringify the JSON payload
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
           username: username,
           password: password
       })
@@ -105,7 +106,6 @@ async function doLogin(){
     
     if(!res.ok){
       const err = await res.json();
-      // Use err.detail for FastAPI 401/400 errors
       loginStatus.innerText = err.detail || err.message || "Login failed.";
       loginBtn.disabled = false;
       return;
@@ -139,17 +139,16 @@ async function doRegister(){
   }
   registerBtn.disabled = true;
   try{
-    const url = `${API_URL}/register`; // Corrected URL (no query params)
-
-    // CORRECTED: Send registration data in a JSON body.
-    // NOTE: The backend requires `display_name`, which is defaulted to the username here
+    const url = `${API_URL}/register`;
+    
+    // CORRECTED: Send registration data in a JSON body
     const res = await fetch(url, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             username: username,
             password: password,
-            display_name: username // Placeholder: consider adding an input field for this
+            display_name: username // Placeholder
         })
     });
     
@@ -183,7 +182,7 @@ async function tryAutoLogin(){
   }
 }
 
-// Loading sequence
+// Loading sequence (mimics loading_widget.py)
 function showLoadingSequence(callback){
   showPage("loading");
   const steps = [
@@ -273,6 +272,7 @@ function renderMessages(messages){
   messages.forEach(m=>{
     const div = document.createElement("div");
     div.classList.add("message");
+    // Simple logic to determine 'me' vs 'other'
     const meText = userDisplay.innerText.replace("User: ","");
     const meId = parseInt(meText) || null;
     const senderId = m.sender_id;
@@ -320,7 +320,7 @@ async function sendMessage(){
   }
 }
 
-// --- New chat modal ---
+// --- New chat modal (mimics newchatdialog.py) ---
 function openNewChatModal(){
   newchatStatus.innerText = "";
   chatNameEl.value = "";
@@ -330,27 +330,40 @@ function openNewChatModal(){
 }
 cancelNew.addEventListener("click", ()=> modal.classList.add("hidden"));
 
+isGroupEl.addEventListener('change', (e) => {
+    const isGroup = e.target.checked;
+    // Show/hide chat name input based on group chat status
+    const chatNameRow = chatNameEl.closest('.form-row');
+    if (chatNameRow) {
+        chatNameRow.style.display = isGroup ? '' : 'none';
+    }
+});
+// Initial call to set visibility
+isGroupEl.dispatchEvent(new Event('change'));
+
+
 confirmNew.addEventListener("click", async ()=>{
   confirmNew.disabled = true;
   newchatStatus.innerText = "";
   const is_group = isGroupEl.checked;
-  const conversation_name = chatNameEl.value || null;
+  const conversation_name = is_group ? (chatNameEl.value || null) : null;
   const participants = participantsEl.value.split(",").map(s=>s.trim()).filter(Boolean);
+  
   if(!participants.length){
     newchatStatus.innerText = "Enter at least one username.";
     confirmNew.disabled = false;
     return;
   }
+  
   try{
     const url = `${API_URL}/create_conversation`;
     const res = await fetch(url, {
       method: "POST",
-      // This part is already correct, sending a JSON body
       headers: { "Content-Type": "application/json", "token": token },
       body: JSON.stringify({ user_names: participants, conversation_name, is_group })
     });
     const data = await res.json();
-    if(data.success){
+    if(res.ok){
       newchatStatus.innerText = "Created. Refreshing...";
       await populateChatList();
       modal.classList.add("hidden");
@@ -377,7 +390,6 @@ async function doLogout(){
 }
 
 // --- Boot ---
-// Initialize loginStatus to ensure no leftover '[object Object]' from previous states
 loginStatus.innerText = ""; 
 
 showPage(token ? "loading" : "login");

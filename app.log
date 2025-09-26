@@ -25,3 +25,6 @@
 2025-09-26 20:11:21,040 - INFO - Get conversation attempt for (4, 'test')
 2025-09-26 20:11:40,712 - INFO - Create conversation attempt for (4, 'test')
 2025-09-26 20:11:48,886 - INFO - Create conversation attempt for (4, 'test')
+2025-09-26 20:39:51,209 - INFO - Create conversation attempt for (4, 'test')
+2025-09-26 20:39:55,471 - INFO - Logout attempt for (4, 'test')
+2025-09-26 20:39:56,663 - INFO - Logout attempt for (4, 'test')
