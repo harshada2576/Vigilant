@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Widget</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <login-widget>Fallback: If you see this, JS may be disabled or there's an error.</login-widget>
+
+    <script>
+        // Dummy backend functions (replace with actual implementations as needed)
+        function verify_user(username, password) {
+            // Simulate verification
+            if (username === "admin" && password === "password") {
+                return { success: true, message: "Login successful!", token: "dummy_token" };
+            } else {
+                return { success: false, message: "Invalid credentials." };
+            }
+        }
+
+        function register_user(username, password, display_name) {
+            // Simulate registration
+            if (username && password) {
+                return { success: true, message: "Registration successful!" };
+            } else {
+                return { success: false, message: "Registration failed." };
+            }
+        }
+
+        function store_encrypted_session(token) {
+            // Simulate storing session
+            console.log("Stored encrypted session:", token);
+        }
+
+        // Define color palettes (from theme.py)
+        const PALETTES = {
+            "light": {
+                "background": "#FAFAFA",
+                "primary_text": "#212121",
+                "secondary_text": "#616161",
+                "ui_borders": "#E0E0E0",
+                "accent": "#2979FF",
+                "shadow": "rgba(0,0,0,0.08)"
+            },
+            "medium": {
+                "background": "#FFF8F0",
+                "primary_text": "#4E4336",
+                "secondary_text": "#7A6F63",
+                "ui_borders": "#D7CFC5",
+                "accent": "#F57C00",
+                "shadow": "rgba(0,0,0,0.10)"
+            },
+            "dark": {
+                "background": "#121212",
+                "primary_text": "#EAEAEA",
+                "secondary_text": "#9E9E9E",
+                "ui_borders": "#2A2A2A",
+                "accent": "#BB86FC",
+                "shadow": "rgba(0,0,0,0.20)"
+            },
+        };
+
+        let CURRENT_PALETTE = "dark";
+
+        // Public Theme Functions
+        function getPalette() {
+            return CURRENT_PALETTE;
+        }
+
+        function setPalette(name) {
+            if (PALETTES.hasOwnProperty(name)) {
+                CURRENT_PALETTE = name;
+            } else {
+                throw new Error(`Invalid palette name: ${name}`);
+            }
+        }
+
+        class LoginWidget extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+                this.buildUI();
+                this.applyPalette();
+                this.setupEventListeners();
+            }
+
+            buildUI() {
+                // Main container
+                this.container = document.createElement('div');
+                this.container.className = 'login-container';
+
+                // Title
+                this.title = document.createElement('div');
+                this.title.className = 'title';
+                this.title.textContent = 'WELCOME BACK';
+
+                // Form container
+                this.formContainer = document.createElement('div');
+                this.formContainer.className = 'form-container';
+
+                // Username row
+                const usernameRow = document.createElement('div');
+                usernameRow.className = 'form-row';
+                this.usernameLabel = document.createElement('label');
+                this.usernameLabel.textContent = 'Username:';
+                this.usernameInput = document.createElement('input');
+                this.usernameInput.type = 'text';
+                this.usernameInput.placeholder = 'Enter Your Username/Email';
+                usernameRow.appendChild(this.usernameLabel);
+                usernameRow.appendChild(this.usernameInput);
+
+                // Password row
+                const passwordRow = document.createElement('div');
+                passwordRow.className = 'form-row';
+                this.passwordLabel = document.createElement('label');
+                this.passwordLabel.textContent = 'Password:';
+                this.passwordInput = document.createElement('input');
+                this.passwordInput.type = 'password';
+                this.passwordInput.placeholder = 'Enter Your Password';
+                passwordRow.appendChild(this.passwordLabel);
+                passwordRow.appendChild(this.passwordInput);
+
+                this.formContainer.appendChild(usernameRow);
+                this.formContainer.appendChild(passwordRow);
+
+                // Login button
+                this.loginButton = document.createElement('button');
+                this.loginButton.className = 'login-button';
+                this.loginButton.textContent = 'Login';
+
+                // Register button
+                this.registerButton = document.createElement('button');
+                this.registerButton.className = 'register-button';
+                this.registerButton.textContent = 'Register';
+
+                // Status label
+                this.statusLabel = document.createElement('div');
+                this.statusLabel.className = 'status-label';
+                this.statusLabel.textContent = '';
+
+                // Append all to container
+                this.container.appendChild(this.title);
+                this.container.appendChild(this.formContainer);
+                this.container.appendChild(this.loginButton);
+                this.container.appendChild(this.registerButton);
+                this.container.appendChild(this.statusLabel);
+
+                this.shadowRoot.appendChild(this.container);
+            }
+
+            applyPalette() {
+                const palette = PALETTES[CURRENT_PALETTE];
+
+                const css = `
+                    :host {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100vw;
+                        height: 100vh;
+                        background-color: ${palette.background};
+                        color: ${palette.primary_text};
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                        font-size: 14px;
+                    }
+
+                    .login-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        padding: 30px 40px;
+                        box-sizing: border-box;
+                        min-width: 400px;
+                        min-height: 320px; /* Added to match Python min size */
+                        gap: 15px;
+                    }
+
+                    .title {
+                        font-size: 20pt;
+                        font-weight: bold;
+                        color: ${palette.accent};
+                        text-align: center;
+                    }
+
+                    .form-container {
+                        display: grid;
+                        grid-template-columns: auto 1fr;
+                        gap: 20px 20px;
+                        align-items: center;
+                        width: 100%;
+                    }
+
+                    .form-row {
+                        display: contents;
+                    }
+
+                    label {
+                        text-align: right;
+                        color: ${palette.primary_text};
+                    }
+
+                    input {
+                        background-color: ${palette.background};
+                        border: 1.5px solid ${palette.ui_borders};
+                        border-radius: 6px;
+                        padding: 10px;
+                        font-size: 15px;
+                        color: ${palette.primary_text};
+                        width: 100%;
+                        box-sizing: border-box;
+                    }
+
+                    input::placeholder {
+                        color: ${palette.secondary_text};
+                    }
+
+                    button {
+                        background-color: ${palette.accent};
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        padding: 10px 20px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        width: auto;
+                    }
+
+                    button:hover {
+                        background-color: ${palette.primary_text};
+                        color: ${palette.background};
+                    }
+
+                    button:active {
+                        background-color: ${palette.accent};
+                        color: white;
+                    }
+
+                    .login-button {
+                        height: 40px;
+                    }
+
+                    .register-button {
+                        height: 30px;
+                    }
+
+                    .status-label {
+                        text-align: center;
+                        color: ${palette.primary_text};
+                    }
+                `;
+
+                let style = this.shadowRoot.querySelector('style');
+                if (!style) {
+                    style = document.createElement('style');
+                    this.shadowRoot.insertBefore(style, this.container);
+                }
+                style.textContent = css;
+            }
+
+            setupEventListeners() {
+                this.usernameInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') this.onLoginClicked();
+                });
+                this.passwordInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') this.onLoginClicked();
+                });
+                this.loginButton.addEventListener('click', () => this.onLoginClicked());
+                this.registerButton.addEventListener('click', () => this.onRegisterClicked());
+            }
+
+            onLoginClicked() {
+                const username = this.usernameInput.value.trim();
+                const password = this.passwordInput.value;
+                this.loginButton.disabled = true;
+                this.statusLabel.textContent = '';
+                if (!username || !password) {
+                    this.statusLabel.textContent = 'Please enter both username and password.';
+                    this.loginButton.disabled = false;
+                    return;
+                }
+
+                const link = verify_user(username, password);
+                if (link.success) {
+                    store_encrypted_session(link.token);
+                    this.statusLabel.textContent = link.message;
+                    this.dispatchEvent(new CustomEvent('loginsuccess', { detail: link.token }));
+                    this.reset();
+                } else {
+                    this.statusLabel.textContent = link.message;
+                    this.loginButton.disabled = false;
+                }
+            }
+
+            onRegisterClicked() {
+                const username = this.usernameInput.value.trim();
+                const password = this.passwordInput.value;
+                const display_name = 'placeholder'; // Add display name feature in register UI/UX
+                this.registerButton.disabled = true;
+                this.statusLabel.textContent = '';
+                if (!username || !password) {
+                    this.statusLabel.textContent = 'Please enter both username and password.';
+                    this.registerButton.disabled = false;
+                    return;
+                }
+
+                const link = register_user(username, password, display_name);
+                if (link.success) {
+                    this.statusLabel.textContent = link.message;
+                } else {
+                    this.statusLabel.textContent = link.message;
+                }
+                this.registerButton.disabled = false;
+            }
+
+            reset() {
+                this.usernameInput.value = '';
+                this.passwordInput.value = '';
+                this.loginButton.disabled = false;
+                this.registerButton.disabled = false;
+            }
+        }
+
+        customElements.define('login-widget', LoginWidget);
+
+        // Example usage
+        const widget = document.querySelector('login-widget');
+
+        // Listen for the event
+        widget.addEventListener('loginsuccess', (e) => {
+            console.log('Login success with token:', e.detail);
+        });
+    </script>
+</body>
+</html>
