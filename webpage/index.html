@@ -345,6 +345,22 @@
             box-shadow: 0 4px 12px var(--shadow);
         }
 
+        /* Settings Dialog Styles */
+        #settings-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 350px;
+            padding: 20px;
+            background-color: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
         .dialog-row {
             margin-bottom: 15px;
         }
@@ -402,7 +418,7 @@
         <div class="login-title">WELCOME BACK</div>
         <div class="form-row">
             <label for="username-input">Username:</label>
-            <input type="text" id="username-input" placeholder="Enter Your Username/Email">
+            <input type="text" id="username-input" placeholder="Enter Your Username">
         </div>
         <div class="form-row">
             <label for="password-input">Password:</label>
@@ -457,8 +473,31 @@
             <input type="text" id="participants-input" placeholder="username1, username2">
         </div>
         <div class="dialog-buttons">
-            <button id="confirm-button" class="dialog-button">Confirm</button>
-            <button id="cancel-button" class="dialog-button">Cancel</button>
+            <button id="confirm-chat-button" class="dialog-button">Confirm</button>
+            <button id="cancel-chat-button" class="dialog-button">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Settings Dialog -->
+    <div id="settings-dialog" class="hidden">
+        <div class="dialog-row">
+            <h3>Settings</h3>
+        </div>
+        <div class="dialog-row">
+            <label for="theme-select">Theme:</label>
+            <select id="theme-select">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="medium">Medium</option>
+            </select>
+        </div>
+        <div class="dialog-row">
+            <label for="auto-login">Auto-login:</label>
+            <input type="checkbox" id="auto-login" checked>
+        </div>
+        <div class="dialog-buttons">
+            <button id="save-settings-button" class="dialog-button">Save</button>
+            <button id="cancel-settings-button" class="dialog-button">Cancel</button>
         </div>
     </div>
 
@@ -471,6 +510,7 @@
             currentView: 'loading',
             currentUser: null,
             currentToken: null,
+            currentUserId: null,
             currentChatId: null,
             conversations: [],
             messages: {},
@@ -490,6 +530,7 @@
         const loginWidget = document.getElementById('login-widget');
         const mainWindow = document.getElementById('main-window');
         const newChatDialog = document.getElementById('new-chat-dialog');
+        const settingsDialog = document.getElementById('settings-dialog');
 
         // Loading Widget Elements
         const loadingLabel = document.getElementById('loading-label');
@@ -510,6 +551,7 @@
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const newChatButton = document.getElementById('new-chat-button');
+        const settingsButton = document.getElementById('settings-button');
         const logoutButton = document.getElementById('logout-button');
 
         // New Chat Dialog Elements
@@ -517,63 +559,74 @@
         const chatNameRow = document.getElementById('chat-name-row');
         const chatNameInput = document.getElementById('chat-name-input');
         const participantsInput = document.getElementById('participants-input');
-        const confirmButton = document.getElementById('confirm-button');
-        const cancelButton = document.getElementById('cancel-button');
+        const confirmChatButton = document.getElementById('confirm-chat-button');
+        const cancelChatButton = document.getElementById('cancel-chat-button');
+
+        // Settings Dialog Elements
+        const themeSelect = document.getElementById('theme-select');
+        const autoLoginCheckbox = document.getElementById('auto-login');
+        const saveSettingsButton = document.getElementById('save-settings-button');
+        const cancelSettingsButton = document.getElementById('cancel-settings-button');
 
         // API Helper Functions
         async function apiCall(endpoint, options = {}) {
             const url = `${API_BASE_URL}${endpoint}`;
-            const config = {
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                },
-                ...options
+            
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
             };
 
             if (appState.currentToken) {
-                config.headers['token'] = appState.currentToken;
+                headers['token'] = appState.currentToken;
             }
 
-            // Convert body to JSON if it's an object
+            const config = {
+                headers: headers,
+                ...options
+            };
+
             if (config.body && typeof config.body === 'object') {
                 config.body = JSON.stringify(config.body);
             }
 
             try {
-                console.log(`API Call: ${url}`, config);
+                console.log(`🔧 API Call: ${config.method || 'GET'} ${url}`, config.body ? JSON.parse(config.body) : '');
+                
                 const response = await fetch(url, config);
                 
                 if (!response.ok) {
-                    let errorDetail = `HTTP error! status: ${response.status}`;
-                    try {
-                        const errorData = await response.json();
-                        errorDetail = errorData.detail || errorDetail;
-                    } catch (e) {
-                        // Ignore JSON parsing errors
-                    }
-                    throw new Error(errorDetail);
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
                 }
                 
-                // Handle empty responses
-                const contentLength = response.headers.get('content-length');
-                if (contentLength === '0') {
-                    return null;
-                }
+                const data = await response.json();
+                console.log(`✅ API Response:`, data);
+                return data;
                 
-                return await response.json();
             } catch (error) {
-                console.error('API call failed:', error);
+                console.error('❌ API call failed:', error);
                 throw error;
             }
         }
 
+        // Get current user ID from token
+        async function getCurrentUserId() {
+            try {
+                const result = await apiCall('/me');
+                if (result && result.success) {
+                    appState.currentUserId = result.user_id;
+                    return result.user_id;
+                }
+            } catch (error) {
+                console.error('Error getting user ID:', error);
+            }
+            return null;
+        }
+
         // Initialize the application
         function init() {
-            // Set up event listeners
             setupEventListeners();
-            
-            // Start with loading screen
             simulateLoading();
         }
 
@@ -589,19 +642,26 @@
                 if (e.key === 'Enter') handleLogin();
             });
 
-            // Main window
+            // Main window buttons - FIXED: Added proper event listeners
             newChatButton.addEventListener('click', showNewChatDialog);
+            settingsButton.addEventListener('click', showSettingsDialog);
             logoutButton.addEventListener('click', handleLogout);
+            
+            // Message input
             messageInput.addEventListener('input', toggleSendButton);
             messageInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
             sendButton.addEventListener('click', sendMessage);
 
-            // New chat dialog
+            // New chat dialog - FIXED: Correct button IDs
             groupCheckbox.addEventListener('change', toggleGroupFields);
-            confirmButton.addEventListener('click', createNewChat);
-            cancelButton.addEventListener('click', hideNewChatDialog);
+            confirmChatButton.addEventListener('click', createNewChat);
+            cancelChatButton.addEventListener('click', hideNewChatDialog);
+
+            // Settings dialog - ADDED: Settings functionality
+            saveSettingsButton.addEventListener('click', saveSettings);
+            cancelSettingsButton.addEventListener('click', hideSettingsDialog);
         }
 
         // Simulate loading process
@@ -616,7 +676,6 @@
                     clearInterval(progressInterval);
                     loadingLabel.textContent = "Loading complete!";
                     
-                    // Fade out loading screen and show login
                     setTimeout(() => {
                         loadingWidget.classList.add('fade-out');
                         setTimeout(() => {
@@ -640,70 +699,22 @@
             loginWidget.classList.remove('hidden');
             loginWidget.classList.add('visible');
             appState.currentView = 'login';
-            
-            // Focus on username input
-            setTimeout(() => {
-                usernameInput.focus();
-            }, 100);
+            setTimeout(() => usernameInput.focus(), 100);
         }
 
         // Show main application
-        function showMainApplication() {
+        async function showMainApplication() {
             loginWidget.classList.remove('visible');
             loginWidget.classList.add('hidden');
             mainWindow.classList.remove('hidden');
             mainWindow.classList.add('visible');
             appState.currentView = 'main';
             
+            // Get user ID first
+            await getCurrentUserId();
+            
             // Populate chat list with data from API
-            populateChatList();
-        }
-
-        // Handle login
-        async function handleLogin() {
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value;
-            
-            loginButton.disabled = true;
-            loginStatus.textContent = '';
-            
-            if (!username || !password) {
-                loginStatus.textContent = "Please enter both username and password.";
-                loginButton.disabled = false;
-                return;
-            }
-            
-            // Authenticate with API
-            loginStatus.textContent = "Authenticating...";
-            
-            try {
-                const result = await apiCall('/login', {
-                    method: 'POST',
-                    body: { username, password }
-                });
-                
-                if (result.success) {
-                    loginStatus.textContent = result.message;
-                    appState.currentUser = username;
-                    appState.currentToken = result.token;
-                    profileLabel.textContent = `User: ${username}`;
-                    
-                    // Transition to main application
-                    setTimeout(() => {
-                        loginWidget.classList.add('fade-out');
-                        setTimeout(() => {
-                            showMainApplication();
-                        }, 500);
-                    }, 1000);
-                } else {
-                    loginStatus.textContent = result.message;
-                    loginButton.disabled = false;
-                }
-            } catch (error) {
-                loginStatus.textContent = "Login failed. Please check if server is running.";
-                loginButton.disabled = false;
-                console.error('Login error:', error);
-            }
+            await populateChatList();
         }
 
         // Handle registration
@@ -720,7 +731,6 @@
                 return;
             }
             
-            // Register with API
             loginStatus.textContent = "Registering...";
             
             try {
@@ -733,27 +743,80 @@
                     }
                 });
                 
-                loginStatus.textContent = result.message;
-                registerButton.disabled = false;
-                
-                // Clear form on successful registration
                 if (result.success) {
+                    loginStatus.textContent = "Registration successful! You can now login.";
+                    loginStatus.style.color = "#4CAF50";
+                    
+                    // Clear form
                     usernameInput.value = '';
                     passwordInput.value = '';
+                } else {
+                    loginStatus.textContent = result.message;
+                    loginStatus.style.color = "#f44336";
                 }
             } catch (error) {
-                loginStatus.textContent = "Registration failed. Please check if server is running.";
-                registerButton.disabled = false;
+                loginStatus.textContent = "Registration failed. Please try again.";
+                loginStatus.style.color = "#f44336";
                 console.error('Registration error:', error);
+            } finally {
+                registerButton.disabled = false;
+            }
+        }
+
+        // Handle login
+        async function handleLogin() {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            
+            loginButton.disabled = true;
+            loginStatus.textContent = '';
+            loginStatus.style.color = "";
+            
+            if (!username || !password) {
+                loginStatus.textContent = "Please enter both username and password.";
+                loginButton.disabled = false;
+                return;
+            }
+            
+            loginStatus.textContent = "Authenticating...";
+            
+            try {
+                const result = await apiCall('/login', {
+                    method: 'POST',
+                    body: { username, password }
+                });
+                
+                if (result.success) {
+                    loginStatus.textContent = "Login successful!";
+                    loginStatus.style.color = "#4CAF50";
+                    
+                    appState.currentUser = username;
+                    appState.currentToken = result.token;
+                    profileLabel.textContent = `User: ${username}`;
+                    
+                    setTimeout(() => {
+                        loginWidget.classList.add('fade-out');
+                        setTimeout(() => {
+                            showMainApplication();
+                        }, 500);
+                    }, 1000);
+                } else {
+                    loginStatus.textContent = result.message || "Invalid username or password.";
+                    loginStatus.style.color = "#f44336";
+                    loginButton.disabled = false;
+                }
+            } catch (error) {
+                loginStatus.textContent = "Login failed. Please check credentials and server.";
+                loginStatus.style.color = "#f44336";
+                loginButton.disabled = false;
+                console.error('Login error:', error);
             }
         }
 
         // Handle logout
         async function handleLogout() {
             try {
-                await apiCall('/logout', {
-                    method: 'POST'
-                });
+                await apiCall('/logout', { method: 'POST' });
             } catch (error) {
                 console.log('Logout API call failed, but proceeding with client-side logout');
             }
@@ -761,6 +824,7 @@
             // Clear application state
             appState.currentUser = null;
             appState.currentToken = null;
+            appState.currentUserId = null;
             appState.currentChatId = null;
             appState.conversations = [];
             appState.messages = {};
@@ -774,135 +838,14 @@
             usernameInput.value = '';
             passwordInput.value = '';
             loginStatus.textContent = '';
+            loginStatus.style.color = "";
         }
 
-        // Populate chat list with data from API
-        async function populateChatList() {
-            try {
-                const conversations = await apiCall('/get_conversation');
-                appState.conversations = Array.isArray(conversations) ? conversations : [];
-                
-                // Clear existing list
-                chatList.innerHTML = '';
-                
-                if (appState.conversations.length === 0) {
-                    chatList.innerHTML = '<div class="chat-list-item">No conversations yet. Create one!</div>';
-                    return;
-                }
-                
-                // Add conversations to list
-                appState.conversations.forEach(conv => {
-                    const item = document.createElement('div');
-                    item.className = 'chat-list-item';
-                    item.textContent = conv.name || `Chat ${conv.id}`;
-                    item.dataset.id = conv.id;
-                    
-                    item.addEventListener('click', () => {
-                        // Remove selected class from all items
-                        document.querySelectorAll('.chat-list-item').forEach(el => {
-                            el.classList.remove('selected');
-                        });
-                        
-                        // Add selected class to clicked item
-                        item.classList.add('selected');
-                        
-                        // Load the chat
-                        loadChat(conv.id);
-                    });
-                    
-                    chatList.appendChild(item);
-                });
-            } catch (error) {
-                console.error('Error loading conversations:', error);
-                chatList.innerHTML = '<div class="chat-list-item">Error loading conversations</div>';
-            }
-        }
-
-        // Load a specific chat
-        async function loadChat(chatId) {
-            appState.currentChatId = chatId;
-            
-            // Find conversation name for header
-            const conversation = appState.conversations.find(conv => conv.id === chatId);
-            chatHeader.textContent = `Chat: ${conversation ? (conversation.name || `Chat ${chatId}`) : 'Unknown'}`;
-            
-            // Clear chat display
-            chatDisplay.innerHTML = '';
-            
-            try {
-                // Fetch messages from API
-                const result = await apiCall(`/get_messages?conversation_id=${chatId}&limit=50`);
-                
-                if (result && result.success && result.messages) {
-                    // Add messages to chat display
-                    result.messages.forEach(msg => {
-                        const messageDiv = document.createElement('div');
-                        // You'll need to get the current user ID from your API to properly identify own messages
-                        const isOwnMessage = msg.sender_id === 1; // This should be dynamic based on logged-in user
-                        messageDiv.className = `message ${isOwnMessage ? 'own-message' : 'other-message'}`;
-                        
-                        const sender = isOwnMessage ? "You" : `User ${msg.sender_id}`;
-                        
-                        messageDiv.innerHTML = `
-                            <div class="message-sender">${sender}</div>
-                            <div class="message-content">${msg.content}</div>
-                            <span class="message-time">${msg.timestamp || ''}</span>
-                        `;
-                        
-                        chatDisplay.appendChild(messageDiv);
-                    });
-                } else {
-                    chatDisplay.innerHTML = '<div class="message">No messages yet. Start the conversation!</div>';
-                }
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                chatDisplay.innerHTML = '<div class="message">Error loading messages</div>';
-            }
-            
-            // Scroll to bottom of chat
-            chatDisplay.scrollTop = chatDisplay.scrollHeight;
-            
-            // Enable message input
-            messageInput.disabled = false;
-            toggleSendButton();
-        }
-
-        // Send a message
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message || !appState.currentChatId) return;
-            
-            try {
-                await apiCall('/send_message', {
-                    method: 'POST',
-                    body: {
-                        conversation_id: appState.currentChatId,
-                        content: message
-                    }
-                });
-                
-                // Clear input
-                messageInput.value = '';
-                toggleSendButton();
-                
-                // Reload chat to show new message
-                loadChat(appState.currentChatId);
-            } catch (error) {
-                console.error('Error sending message:', error);
-                alert('Failed to send message. Please try again.');
-            }
-        }
-
-        // Toggle send button based on input
-        function toggleSendButton() {
-            sendButton.disabled = !messageInput.value.trim() || !appState.currentChatId;
-        }
-
-        // Show new chat dialog
+        // Show new chat dialog - FIXED: This function was missing
         function showNewChatDialog() {
+            console.log("New Chat button clicked!");
             newChatDialog.style.display = 'block';
-            toggleGroupFields(); // Set initial state
-            // Focus on first input
+            toggleGroupFields();
             setTimeout(() => {
                 if (groupCheckbox.checked) {
                     chatNameInput.focus();
@@ -915,10 +858,33 @@
         // Hide new chat dialog
         function hideNewChatDialog() {
             newChatDialog.style.display = 'none';
-            // Reset form
             chatNameInput.value = '';
             participantsInput.value = '';
             groupCheckbox.checked = true;
+        }
+
+        // Show settings dialog - ADDED: Settings functionality
+        function showSettingsDialog() {
+            console.log("Settings button clicked!");
+            settingsDialog.style.display = 'block';
+        }
+
+        // Hide settings dialog
+        function hideSettingsDialog() {
+            settingsDialog.style.display = 'none';
+        }
+
+        // Save settings
+        function saveSettings() {
+            const theme = themeSelect.value;
+            const autoLogin = autoLoginCheckbox.checked;
+            
+            // Save to localStorage
+            localStorage.setItem('theme', theme);
+            localStorage.setItem('autoLogin', autoLogin);
+            
+            alert('Settings saved successfully!');
+            hideSettingsDialog();
         }
 
         // Toggle group chat fields
@@ -955,7 +921,7 @@
                     method: 'POST',
                     body: {
                         user_names: participants,
-                        conversation_name: chatName || null,
+                        conversation_name: isGroup ? chatName : null,
                         is_group: isGroup
                     }
                 });
@@ -963,20 +929,20 @@
                 console.log('Create conversation result:', result);
                 
                 if (result && result.success) {
-                    // Update chat list
                     await populateChatList();
-                    
-                    // Close dialog
                     hideNewChatDialog();
                     
-                    // Select the new chat if we have the ID
+                    // Select the new chat
                     if (result.message) {
                         setTimeout(() => {
-                            const newChatItem = document.querySelector(`.chat-list-item[data-id="${result.message}"]`);
+                            const newChatItems = document.querySelectorAll('.chat-list-item');
+                            const newChatItem = Array.from(newChatItems).find(item => 
+                                item.dataset.id == result.message
+                            );
                             if (newChatItem) {
                                 newChatItem.click();
                             }
-                        }, 100);
+                        }, 500);
                     }
                     
                     alert('Chat created successfully!');
@@ -989,7 +955,111 @@
             }
         }
 
-        // Initialize the application when DOM is loaded
+        // Populate chat list with data from API
+        async function populateChatList() {
+            try {
+                const conversations = await apiCall('/get_conversation');
+                appState.conversations = Array.isArray(conversations) ? conversations : [];
+                
+                chatList.innerHTML = '';
+                
+                if (appState.conversations.length === 0) {
+                    chatList.innerHTML = '<div class="chat-list-item">No conversations yet. Click "New Chat" to start!</div>';
+                    return;
+                }
+                
+                appState.conversations.forEach(conv => {
+                    const item = document.createElement('div');
+                    item.className = 'chat-list-item';
+                    item.textContent = conv.name || `Chat ${conv.id}`;
+                    item.dataset.id = conv.id;
+                    
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.chat-list-item').forEach(el => {
+                            el.classList.remove('selected');
+                        });
+                        item.classList.add('selected');
+                        loadChat(conv.id);
+                    });
+                    
+                    chatList.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Error loading conversations:', error);
+                chatList.innerHTML = '<div class="chat-list-item">Error loading conversations</div>';
+            }
+        }
+
+        // Load a specific chat
+        async function loadChat(chatId) {
+            appState.currentChatId = chatId;
+            
+            const conversation = appState.conversations.find(conv => conv.id === chatId);
+            chatHeader.textContent = `Chat: ${conversation ? (conversation.name || `Chat ${chatId}`) : 'Unknown'}`;
+            
+            chatDisplay.innerHTML = '';
+            
+            try {
+                const result = await apiCall(`/get_messages?conversation_id=${chatId}&limit=50`);
+                
+                if (result && result.success && result.messages) {
+                    result.messages.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        const isOwnMessage = msg.sender_id === appState.currentUserId;
+                        messageDiv.className = `message ${isOwnMessage ? 'own-message' : 'other-message'}`;
+                        
+                        const sender = isOwnMessage ? "You" : `User ${msg.sender_id}`;
+                        
+                        messageDiv.innerHTML = `
+                            <div class="message-sender">${sender}</div>
+                            <div class="message-content">${msg.content}</div>
+                            <span class="message-time">${msg.timestamp || ''}</span>
+                        `;
+                        
+                        chatDisplay.appendChild(messageDiv);
+                    });
+                } else {
+                    chatDisplay.innerHTML = '<div class="message">No messages yet. Start the conversation!</div>';
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                chatDisplay.innerHTML = '<div class="message">Error loading messages</div>';
+            }
+            
+            chatDisplay.scrollTop = chatDisplay.scrollHeight;
+            messageInput.disabled = false;
+            toggleSendButton();
+        }
+
+        // Send a message
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !appState.currentChatId) return;
+            
+            try {
+                await apiCall('/send_message', {
+                    method: 'POST',
+                    body: {
+                        conversation_id: appState.currentChatId,
+                        content: message
+                    }
+                });
+                
+                messageInput.value = '';
+                toggleSendButton();
+                loadChat(appState.currentChatId);
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Failed to send message. Please try again.');
+            }
+        }
+
+        // Toggle send button based on input
+        function toggleSendButton() {
+            sendButton.disabled = !messageInput.value.trim() || !appState.currentChatId;
+        }
+
+        // Initialize the application
         document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
