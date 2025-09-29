@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading Widget</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <loading-widget></loading-widget>
+
+    <script>
+        // Define color palettes
+        const PALETTES = {
+            "light": {
+                "background": "#FAFAFA",
+                "primary_text": "#212121",
+                "secondary_text": "#616161",
+                "ui_borders": "#E0E0E0",
+                "accent": "#2979FF",
+                "shadow": "rgba(0,0,0,0.08)"
+            },
+            "medium": {
+                "background": "#FFF8F0",
+                "primary_text": "#4E4336",
+                "secondary_text": "#7A6F63",
+                "ui_borders": "#D7CFC5",
+                "accent": "#F57C00",
+                "shadow": "rgba(0,0,0,0.10)"
+            },
+            "dark": {
+                "background": "#121212",
+                "primary_text": "#EAEAEA",
+                "secondary_text": "#9E9E9E",
+                "ui_borders": "#2A2A2A",
+                "accent": "#BB86FC",
+                "shadow": "rgba(0,0,0,0.20)"
+            },
+        };
+
+        let CURRENT_PALETTE = "dark";
+
+        // Public Theme Functions
+        function getPalette() {
+            return CURRENT_PALETTE;
+        }
+
+        function setPalette(name) {
+            if (PALETTES.hasOwnProperty(name)) {
+                CURRENT_PALETTE = name;
+            } else {
+                throw new Error(`Invalid palette name: ${name}`);
+            }
+        }
+
+        class LoadingWidget extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+
+                this.steps = [
+                    "Connecting to server...",
+                    "Loading user data...",
+                    "Preparing interface...",
+                    "Finalizing setup...",
+                    "Done!"
+                ];
+                this.current_step = 0;
+                this.progress_value = 0;
+                this.timer = null;
+
+                this.buildUI();
+                this.applyPalette();
+            }
+
+            buildUI() {
+                // Build UI elements
+                this.container = document.createElement('div');
+                this.container.className = 'loading-container';
+
+                this.label = document.createElement('div');
+                this.label.className = 'loading-label';
+                this.label.id = 'primary'; // Mimic objectName "primary"
+                this.label.textContent = '';
+
+                this.progress = document.createElement('progress');
+                this.progress.max = this.steps.length * 20;
+                this.progress.value = 0;
+
+                this.container.appendChild(this.label);
+                this.container.appendChild(this.progress);
+
+                this.shadowRoot.appendChild(this.container);
+            }
+
+            applyPalette() {
+                const palette = PALETTES[CURRENT_PALETTE];
+
+                // Generate CSS based on QSS_TEMPLATE
+                const css = `
+                    :host {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100vw;
+                        height: 100vh;
+                        background-color: ${palette.background};
+                        color: ${palette.primary_text};
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                        font-size: 14px;
+                    }
+
+                    .loading-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 40px 50px;
+                        box-sizing: border-box;
+                        max-width: 450px;
+                        width: 100%;
+                        gap: 20px;
+                    }
+
+                    .loading-label {
+                        text-align: center;
+                        color: ${palette.primary_text};
+                        font-size: 16pt; /* Matches pointSize(16) */
+                    }
+
+                    #primary {
+                        font-weight: bold;
+                        color: ${palette.accent};
+                    }
+
+                    progress {
+                        width: 100%;
+                        height: 24px;
+                        border: 1px solid ${palette.ui_borders};
+                        border-radius: 5px;
+                        background-color: ${palette.background};
+                        color: ${palette.primary_text}; /* For text if any */
+                        appearance: none;
+                    }
+
+                    progress::-webkit-progress-bar {
+                        background-color: ${palette.background};
+                        border-radius: 5px;
+                    }
+
+                    progress::-webkit-progress-value {
+                        background-color: ${palette.accent};
+                        border-radius: 5px;
+                    }
+
+                    progress::-moz-progress-bar {
+                        background-color: ${palette.accent};
+                        border-radius: 5px;
+                    }
+                `;
+
+                // Apply styles
+                let style = this.shadowRoot.querySelector('style');
+                if (!style) {
+                    style = document.createElement('style');
+                    this.shadowRoot.insertBefore(style, this.container);
+                }
+                style.textContent = css;
+            }
+
+            startLoading() {
+                this.current_step = 0;
+                this.progress_value = 0;
+                this.progress.value = 0;
+                this.label.textContent = this.steps[0];
+                if (this.timer) clearInterval(this.timer);
+                this.timer = setInterval(() => this.advanceProgress(), 100);
+            }
+
+            advanceProgress() {
+                this.progress_value += 1;
+                this.progress.value = this.progress_value;
+
+                const step_index = Math.floor(this.progress_value / 20);
+                if (step_index >= this.steps.length) {
+                    clearInterval(this.timer);
+                    this.label.textContent = "Loading complete!";
+                    setTimeout(() => {
+                        this.dispatchEvent(new CustomEvent('loadingfinished'));
+                    }, 1000);
+                    return;
+                }
+
+                if (step_index !== this.current_step) {
+                    this.current_step = step_index;
+                    this.label.textContent = this.steps[this.current_step];
+                }
+            }
+        }
+
+        customElements.define('loading-widget', LoadingWidget);
+
+        // Example usage
+        const widget = document.querySelector('loading-widget');
+        widget.startLoading();
+
+        // Listen for the event
+        widget.addEventListener('loadingfinished', () => {
+            console.log('Loading finished!');
+        });
+    </script>
+</body>
+</html>
