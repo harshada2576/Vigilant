@@ -46,6 +46,8 @@ class LoginWidget(QtWidgets.QWidget):
 
         self.login_button = QtWidgets.QPushButton("Login")
         self.login_button.setFixedHeight(40)
+        self.username_input.returnPressed.connect(self.on_login_clicked)
+        self.password_input.returnPressed.connect(self.on_login_clicked)
         self.login_button.clicked.connect(self.on_login_clicked)
         layout.addWidget(self.login_button, alignment=QtCore.Qt.AlignCenter)
 
@@ -70,8 +72,10 @@ class LoginWidget(QtWidgets.QWidget):
 
         link = verify_user(username, password)
         if link["success"]:
+            from backend.session import store_encrypted_session
+            store_encrypted_session(link["token"])
             self.status_label.setText(link["message"])
-            self.login_success.emit(username)
+            self.login_success.emit(link["token"])
             self.reset()
         else:
             # needs dynamic error handling through status_label
@@ -81,13 +85,14 @@ class LoginWidget(QtWidgets.QWidget):
     def on_register_clicked(self):
         username = self.username_input.text().strip()
         password = self.password_input.text()
+        display_name = "placeholder"                                            # add display name feature in register UI/UX
         self.register_button.setEnabled(False)
         self.status_label.setText("")
         if not username or not password:
             self.status_label.setText("Please enter both username and password.")
             self.register_button.setEnabled(True)
             return
-        link = register_user(username, password)
+        link = register_user(username, password, display_name)
         if link["success"]:
             self.status_label.setText(link["message"])
         else:

@@ -1,3 +1,7 @@
+bcrypt
+uvicorn
+keyring
+fastapi
+pydantic
+python-dotenv
 cryptography
-pycryptodome
-pyqt5

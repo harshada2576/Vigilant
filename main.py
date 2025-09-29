@@ -5,11 +5,12 @@ os.environ["QT_QPA_PLATFORMTHEME"] = ""                 # Let your stylesheet ta
 
 import sys
 from PyQt5 import QtWidgets
+from UI.theme import * 
 from UI.login_widget import LoginWidget
 from UI.loading_widget import LoadingWidget
 from UI.mainwindow_widget import MainWindow
-from UI.theme import * 
-
+from backend.session import load_encrypted_session, clear_session
+from backend.user_auth import validate_session_token
 
 
 class LinkApp(QtWidgets.QMainWindow):
@@ -28,28 +29,45 @@ class LinkApp(QtWidgets.QMainWindow):
         self.stack.addWidget(self.login_widget)
         self.stack.addWidget(self.loading_widget)
 
-        self.login_widget.login_success.connect(self.on_login_success)
-        self.loading_widget.loading_finished.connect(self.on_loading_finished)
+        self.login_widget.login_success.connect(self.open_loading)
+        self.loading_widget.loading_finished.connect(self.open_mainwindow)
 
+        #===Attemp Auto Login===
+        token = load_encrypted_session()
+        if token and validate_session_token(token):
+            self.token = token
+            self.open_mainwindow()
+        else:
+            clear_session()
+            self.open_login()
+
+    def open_login(self):
+        self.token = None  # Track authenticated user
         self.stack.setCurrentWidget(self.login_widget)
-        self.username = None  # Track authenticated user
 
-    def on_login_success(self, username):
+    def open_loading(self, token):
         # Only proceed if authentication is successful
-        self.username = username
-        self.stack.setCurrentWidget(self.loading_widget)
-        self.loading_widget.start_loading()
+        self.token = token
+        self.open_mainwindow()
+#        self.stack.setCurrentWidget(self.loading_widget)
+#        self.loading_widget.start_loading()
 
-    def on_loading_finished(self):
-        if self.username is None:
+    def open_mainwindow(self):
+        if self.token is None:
             # Prevent access if not authenticated
             self.stack.setCurrentWidget(self.login_widget)
             return
         if self.mainwindow_widget is None:
-            self.mainwindow_widget = MainWindow(self.username)
+            self.mainwindow_widget = MainWindow(self.token)
+            self.mainwindow_widget.session_expired.connect(self.session_expired)
             self.stack.addWidget(self.mainwindow_widget)
         self.stack.setCurrentWidget(self.mainwindow_widget)
-        self.resize(900, 600)
+        self.resize(900, 600)  
+    
+    def session_expired(self):
+        self.stack.removeWidget(self.mainwindow_widget)
+        self.mainwindow_widget.deleteLater()
+        self.open_login()
 
 def main():
     app = QtWidgets.QApplication(sys.argv)

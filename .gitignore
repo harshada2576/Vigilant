@@ -1,3 +1,6 @@
+# Ignore swap files made by vim
+*.swp
+
 # Ignore Qt Designer files
 *.ui
 *.qrc
