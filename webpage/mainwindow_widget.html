@@ -335,21 +335,22 @@
 
     <!-- New Chat Dialog -->
     <div id="new-chat-dialog" class="hidden">
-        <div class="dialog-row">
-            <input type="checkbox" id="group-checkbox" checked>
-            <label for="group-checkbox">Group Chat</label>
+        <div class="dialog-row" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="group-checkbox" checked style="margin-right: 8px;">
+            <label for="group-checkbox" style="margin: 0;">Group Chat</label>
         </div>
         <div class="dialog-row" id="chat-name-row">
-            <label for="chat-name-input">Chat Name:</label>
-            <input type="text" id="chat-name-input" placeholder="Enter chat name">
+            <label for="chat-name-input" style="width: 100px;">Chat Name:</label>
+            <input type="text" id="chat-name-input" placeholder="Enter chat name" style="flex: 1;">
         </div>
         <div class="dialog-row">
-            <label for="participants-input">Usernames (comma separated):</label>
-            <input type="text" id="participants-input" placeholder="username1, username2">
+            <label for="participants-input" style="width: 100px;">Participants:</label>
+            <input type="text" id="participants-input" placeholder="username1, username2" style="flex: 1;">
         </div>
-        <div class="dialog-buttons">
-            <button id="confirm-chat-button" class="dialog-button">Confirm</button>
-            <button id="cancel-chat-button" class="dialog-button">Cancel</button>
+        <div id="chat-dialog-error" style="color: #ff5555; min-height: 18px; text-align: center; font-size: 13px;"></div>
+        <div class="dialog-buttons" style="justify-content: flex-end; gap: 10px;">
+            <button id="confirm-chat-button" class="dialog-button" style="min-width: 90px;">Create</button>
+            <button id="cancel-chat-button" class="dialog-button" style="min-width: 90px; background: #444;">Cancel</button>
         </div>
     </div>
 
@@ -522,9 +523,33 @@
             appState.conversations.forEach(conv => {
                 const item = document.createElement('div');
                 item.className = 'chat-list-item';
-                item.textContent = conv.name;
                 item.dataset.id = conv.id;
-                
+
+                // Avatar (first letter or icon)
+                const avatar = document.createElement('span');
+                avatar.className = 'chat-avatar';
+                avatar.textContent = (conv.name && conv.name.length > 0) ? conv.name[0].toUpperCase() : 'C';
+                avatar.style = 'display:inline-block;width:32px;height:32px;background:#BB86FC;color:#fff;border-radius:50%;text-align:center;line-height:32px;font-weight:bold;margin-right:12px;font-size:16px;vertical-align:middle;';
+
+                // Chat name
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = conv.name;
+                nameSpan.style = 'vertical-align:middle;font-size:15px;font-weight:500;';
+
+                // Unread count (if available)
+                let unread = conv.unread_count || 0;
+                let unreadBadge = null;
+                if (unread > 0) {
+                    unreadBadge = document.createElement('span');
+                    unreadBadge.textContent = unread;
+                    unreadBadge.className = 'unread-badge';
+                    unreadBadge.style = 'background:#ff5555;color:#fff;border-radius:12px;padding:2px 8px;font-size:12px;margin-left:8px;vertical-align:middle;';
+                }
+
+                item.appendChild(avatar);
+                item.appendChild(nameSpan);
+                if (unreadBadge) item.appendChild(unreadBadge);
+
                 item.addEventListener('click', () => {
                     document.querySelectorAll('.chat-list-item').forEach(el => {
                         el.classList.remove('selected');
@@ -532,7 +557,7 @@
                     item.classList.add('selected');
                     loadChat(item);
                 });
-                
+
                 chatList.appendChild(item);
             });
         }
@@ -550,7 +575,7 @@
             let messages = [];
             if (token) {
                 try {
-                    const response = await fetch(`http://localhost:8000/get_messages?conversation_id=${chatId}`, {
+                    const response = await fetch(`${API_BASE}/get_messages?conversation_id=${chatId}`, {
                         headers: { 'token': token }
                     });
                     if (response.ok) {
@@ -568,11 +593,13 @@
                     const isOwnMessage = (msg.sender_id === appState.currentUserId);
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message ${isOwnMessage ? 'own-message' : 'other-message'}`;
+                    // Format timestamp (HH:MM AM/PM)
+                    let time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                     const sender = isOwnMessage ? "You" : (msg.sender_display_name || `User ${msg.sender_id}`);
                     messageDiv.innerHTML = `
-                        <div class=\"message-sender\">${sender}</div>
-                        <div class=\"message-content\">${msg.content}</div>
-                        <span class=\"message-time\">[${msg.timestamp}]</span>
+                        <div class="message-sender" style="font-weight:bold;${isOwnMessage ? 'color:#2979FF;' : ''}">${sender}</div>
+                        <div class="message-content" style="margin-top:2px;">${msg.content}</div>
+                        <span class="message-time" style="color:#888;font-size:10px;float:right;">[${time}]</span>
                     `;
                     chatDisplay.appendChild(messageDiv);
                 });
@@ -580,6 +607,12 @@
             chatDisplay.scrollTop = chatDisplay.scrollHeight;
             messageInput.disabled = false;
             toggleSendButton();
+
+            // Real-time polling for new messages (every 3s)
+            if (window._chatPollInterval) clearInterval(window._chatPollInterval);
+            window._chatPollInterval = setInterval(() => {
+                if (appState.currentChatId === chatId) loadChat(item);
+            }, 3000);
         }
 
         // Send a message
@@ -589,7 +622,7 @@
             const token = getToken();
             if (!token) return;
             try {
-                const response = await fetch(`http://localhost:8000/send_message?conversation_id=${appState.currentChatId}&content=${encodeURIComponent(message)}`, {
+                const response = await fetch(`${API_BASE}/send_message?conversation_id=${appState.currentChatId}&content=${encodeURIComponent(message)}`, {
                     method: 'POST',
                     headers: { 'token': token }
                 });
@@ -598,8 +631,12 @@
                     messageInput.value = '';
                     toggleSendButton();
                     await loadChat(document.querySelector(`.chat-list-item[data-id="${appState.currentChatId}"]`));
+                } else {
+                    showNotification('Failed to send message.', 'error');
                 }
-            } catch (e) {}
+            } catch (e) {
+                showNotification('Network error: ' + e.message, 'error');
+            }
         }
 
         // Toggle send button based on input
@@ -643,69 +680,109 @@
         }
 
         // Create new chat
-        function createNewChat() {
+        async function createNewChat() {
             const isGroup = groupCheckbox.checked;
             const chatName = chatNameInput.value.trim();
             const participantsText = participantsInput.value.trim();
-            
+            const errorDiv = document.getElementById('chat-dialog-error');
+            errorDiv.textContent = '';
             if (!participantsText) {
-                alert('Please enter at least one participant username.');
+                errorDiv.textContent = 'Please enter at least one participant username.';
                 return;
             }
-            
             const participants = participantsText.split(',').map(p => p.trim()).filter(p => p);
-            
             if (participants.length === 0) {
-                alert('Please enter at least one valid participant username.');
+                errorDiv.textContent = 'Please enter at least one valid participant username.';
                 return;
             }
-            
             if (isGroup && !chatName) {
-                alert('Please enter a chat name for group chats.');
+                errorDiv.textContent = 'Please enter a chat name for group chats.';
                 return;
             }
-            
-            // Create new conversation
-            const newConv = {
-                id: Math.max(...appState.conversations.map(c => c.id)) + 1,
-                name: isGroup ? chatName : participants[0]
-            };
-            
-            appState.conversations.push(newConv);
-            
-            // Initialize empty messages array
-            appState.messages[newConv.id] = [];
-            
-            // Update UI
-            populateChatList();
-            hideNewChatDialog();
-            
-            // Select the new chat
-            setTimeout(() => {
-                const newChatItem = document.querySelector(`.chat-list-item[data-id="${newConv.id}"]`);
-                if (newChatItem) {
-                    newChatItem.click();
+            // Call backend API to create conversation
+            const token = getToken();
+            try {
+                const response = await fetch(`${API_BASE}/create_conversation`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'token': token
+                    },
+                    body: JSON.stringify({
+                        user_names: participants,
+                        conversation_name: isGroup ? chatName : null,
+                        is_group: isGroup
+                    })
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    // Refresh chat list from backend
+                    const conversations = await fetchConversations();
+                    appState.conversations = conversations;
+                    populateChatList();
+                    hideNewChatDialog();
+                    setTimeout(() => {
+                        // Try to select the new chat
+                        const newChatItem = document.querySelector(`.chat-list-item[data-id="${data.conversation_id || ''}"]`);
+                        if (newChatItem) {
+                            newChatItem.click();
+                        }
+                    }, 100);
+                    // Show success feedback
+                    errorDiv.style.color = '#44cc44';
+                    errorDiv.textContent = 'Chat created successfully!';
+                    setTimeout(() => { errorDiv.textContent = ''; errorDiv.style.color = '#ff5555'; }, 1200);
+                } else {
+                    errorDiv.textContent = data.message || 'Failed to create chat.';
                 }
-            }, 100);
-            
-            alert('Chat created successfully!');
+            } catch (e) {
+                errorDiv.textContent = 'Network error: ' + e.message;
+            }
         }
 
         // Save settings
-        function saveSettings() {
+        async function saveSettings() {
             const newDisplayName = displayNameInput.value.trim();
             const theme = themeSelect.value;
-            
+            let success = true;
+            let msg = '';
+            // Persist display name via backend if possible
             if (newDisplayName) {
+                // If you have a backend endpoint for updating display name, call it here
+                // Example (uncomment and adjust if endpoint exists):
+                // const token = getToken();
+                // try {
+                //     const response = await fetch(`${API_BASE}/update_display_name`, {
+                //         method: 'POST',
+                //         headers: { 'Content-Type': 'application/json', 'token': token },
+                //         body: JSON.stringify({ display_name: newDisplayName })
+                //     });
+                //     if (!response.ok) { success = false; msg = 'Failed to update display name.'; }
+                // } catch (e) { success = false; msg = 'Network error: ' + e.message; }
                 appState.currentUser = newDisplayName;
                 updateProfileLabel();
             }
-            
-            // Apply theme (simplified - in real app you'd update CSS variables)
-            console.log(`Theme changed to: ${theme}`);
-            
-            alert('Settings saved successfully!');
-            hideSettingsDialog();
+            // Apply theme (update CSS variables)
+            document.documentElement.setAttribute('data-theme', theme);
+            // Optionally, update CSS variables here for more advanced theming
+            // Show styled notification instead of alert
+            showNotification(success ? 'Settings saved successfully!' : msg, success ? 'success' : 'error');
+            if (success) hideSettingsDialog();
+        // Styled notification for errors/success
+        function showNotification(message, type) {
+            let notif = document.getElementById('styled-notification');
+            if (!notif) {
+                notif = document.createElement('div');
+                notif.id = 'styled-notification';
+                notif.style = 'position:fixed;top:30px;right:30px;z-index:2000;padding:16px 28px;border-radius:8px;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.15);min-width:200px;text-align:center;';
+                document.body.appendChild(notif);
+            }
+            notif.textContent = message;
+            notif.style.background = type === 'success' ? '#44cc44' : '#ff5555';
+            notif.style.color = '#fff';
+            notif.style.display = 'block';
+            setTimeout(() => { notif.style.display = 'none'; }, 1800);
+        }
         }
 
         // Handle logout
@@ -713,19 +790,16 @@
             if (confirm('Are you sure you want to logout?')) {
                 // Clear application state
                 appState.currentChatId = null;
-                
                 // Reset UI
                 chatHeader.textContent = 'Select a chat';
                 chatDisplay.innerHTML = '';
                 messageInput.value = '';
                 sendButton.disabled = true;
-                
                 // Deselect any selected chat
                 document.querySelectorAll('.chat-list-item').forEach(item => {
                     item.classList.remove('selected');
                 });
-                
-                alert('Logged out successfully!');
+                showNotification('Logged out successfully!', 'success');
             }
         }
 
