@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CipherLink Theme System</title>
+    <style>
+        /* Base styles that will be overridden by theme variables */
+        :root {
+            /* Light Theme Default */
+            --background: #FAFAFA;
+            --primary-text: #212121;
+            --secondary-text: #616161;
+            --ui-borders: #E0E0E0;
+            --accent: #2979FF;
+            --shadow: rgba(0,0,0,0.08);
+            --chat-bg: #f5f5f5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+                Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            font-size: 14px;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--primary-text);
+            transition: all 0.3s ease;
+        }
+
+        /* Theme Demo Container */
+        .theme-demo {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+
+        /* Theme Controls */
+        .theme-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+        }
+
+        .theme-button {
+            background-color: var(--accent);
+            color: white;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .theme-button:hover {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        .theme-button:active {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        /* Demo Widgets */
+        .demo-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+        }
+
+        .demo-section h2 {
+            margin-bottom: 15px;
+            color: var(--accent);
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* Label Styles */
+        .demo-label {
+            color: var(--primary-text);
+            margin-bottom: 10px;
+        }
+
+        .demo-label.primary {
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .demo-label.chat-header {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--primary-text);
+        }
+
+        /* Input Styles */
+        .demo-input {
+            background-color: var(--background);
+            border: 1.5px solid var(--ui-borders);
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 15px;
+            color: var(--primary-text);
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .demo-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Button Styles */
+        .demo-button {
+            background-color: var(--accent);
+            color: white;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .demo-button:hover {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        .demo-button:active {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        /* Progress Bar Styles */
+        .demo-progress {
+            width: 100%;
+            height: 24px;
+            border: 1px solid var(--ui-borders);
+            border-radius: 5px;
+            background-color: var(--background);
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .demo-progress-bar {
+            height: 100%;
+            background-color: var(--accent);
+            width: 60%;
+            transition: width 0.3s ease;
+        }
+
+        /* List Styles */
+        .demo-list {
+            border: 1px solid var(--ui-borders);
+            background-color: var(--background);
+            color: var(--primary-text);
+            border-radius: 6px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .demo-list-item {
+            padding: 15px;
+            border-bottom: 1px solid var(--ui-borders);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .demo-list-item:hover {
+            background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        }
+
+        .demo-list-item.selected {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .demo-list-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Text Edit Styles */
+        .demo-text-edit {
+            background-color: var(--chat-bg);
+            border-radius: 8px;
+            padding: 15px;
+            color: var(--primary-text);
+            font-size: 14px;
+            border: 1px solid var(--ui-borders);
+            min-height: 120px;
+            margin-bottom: 10px;
+        }
+
+        /* Scrollbar Styles */
+        .scrollable-content {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--ui-borders);
+            border-radius: 6px;
+            padding: 10px;
+            background: var(--background);
+        }
+
+        .scrollable-content::-webkit-scrollbar {
+            width: 8px;
+            background-color: var(--background);
+        }
+
+        .scrollable-content::-webkit-scrollbar-thumb {
+            background-color: var(--accent);
+            border-radius: 4px;
+        }
+
+        /* Splitter Demo */
+        .demo-splitter {
+            display: flex;
+            height: 200px;
+            border: 1px solid var(--ui-borders);
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .splitter-left {
+            flex: 1;
+            background: var(--background);
+            padding: 15px;
+        }
+
+        .splitter-handle {
+            width: 4px;
+            background-color: var(--ui-borders);
+            cursor: col-resize;
+        }
+
+        .splitter-right {
+            flex: 1;
+            background: var(--background);
+            padding: 15px;
+        }
+
+        /* Current Theme Display */
+        .current-theme {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--accent);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="current-theme" id="current-theme">Current: Light</div>
+
+    <div class="theme-demo">
+        <!-- Theme Controls -->
+        <div class="theme-controls">
+            <button class="theme-button" onclick="setTheme('light')">Light Theme</button>
+            <button class="theme-button" onclick="setTheme('medium')">Medium Theme</button>
+            <button class="theme-button" onclick="setTheme('dark')">Dark Theme</button>
+            <button class="theme-button" onclick="refreshTheme()">Refresh Theme</button>
+        </div>
+
+        <!-- Demo Widgets -->
+        <div class="demo-section">
+            <h2>Labels</h2>
+            <div class="demo-label">Normal Label</div>
+            <div class="demo-label primary">Primary Label (Accent Color)</div>
+            <div class="demo-label chat-header">Chat Header Label</div>
+        </div>
+
+        <div class="demo-section">
+            <h2>Input Fields</h2>
+            <input type="text" class="demo-input" placeholder="Enter text here...">
+            <input type="password" class="demo-input" placeholder="Enter password...">
+        </div>
+
+        <div class="demo-section">
+            <h2>Buttons</h2>
+            <button class="demo-button">Normal Button</button>
+            <button class="demo-button" disabled>Disabled Button</button>
+            <button class="demo-button">Hover Me!</button>
+        </div>
+
+        <div class="demo-section">
+            <h2>Progress Bar</h2>
+            <div class="demo-progress">
+                <div class="demo-progress-bar" id="progress-bar"></div>
+            </div>
+            <button class="demo-button" onclick="animateProgress()">Animate Progress</button>
+        </div>
+
+        <div class="demo-section">
+            <h2>List Widget</h2>
+            <div class="demo-list">
+                <div class="demo-list-item" onclick="selectItem(this)">List Item 1</div>
+                <div class="demo-list-item" onclick="selectItem(this)">List Item 2</div>
+                <div class="demo-list-item selected" onclick="selectItem(this)">Selected Item</div>
+                <div class="demo-list-item" onclick="selectItem(this)">List Item 4</div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>Text Edit</h2>
+            <div class="demo-text-edit" contenteditable="true">
+                This is a text edit area. You can type here and see how the theme affects the text appearance and background.
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>Scrollable Content</h2>
+            <div class="scrollable-content">
+                <p>Scrollable content demo...</p>
+                <p>Line 1</p>
+                <p>Line 2</p>
+                <p>Line 3</p>
+                <p>Line 4</p>
+                <p>Line 5</p>
+                <p>Line 6</p>
+                <p>Line 7</p>
+                <p>Line 8</p>
+                <p>Line 9</p>
+                <p>Line 10</p>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>Splitter Demo</h2>
+            <div class="demo-splitter">
+                <div class="splitter-left">Left Panel</div>
+                <div class="splitter-handle"></div>
+                <div class="splitter-right">Right Panel</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === Define color palettes ===
+        const PALETTES = {
+            "light": {
+                "background": "#FAFAFA",
+                "primary_text": "#212121",
+                "secondary_text": "#616161",
+                "ui_borders": "#E0E0E0",
+                "accent": "#2979FF",
+                "shadow": "rgba(0,0,0,0.08)",
+                "chat_bg": "#f5f5f5"
+            },
+            "medium": {
+                "background": "#FFF8F0",
+                "primary_text": "#4E4336",
+                "secondary_text": "#7A6F63",
+                "ui_borders": "#D7CFC5",
+                "accent": "#F57C00",
+                "shadow": "rgba(0,0,0,0.10)",
+                "chat_bg": "#FFF8F0"
+            },
+            "dark": {
+                "background": "#121212",
+                "primary_text": "#EAEAEA",
+                "secondary_text": "#9E9E9E",
+                "ui_borders": "#2A2A2A",
+                "accent": "#BB86FC",
+                "shadow": "rgba(0,0,0,0.20)",
+                "chat_bg": "#571452"
+            }
+        };
+
+        let CURRENT_PALETTE = "light";
+
+        // === Public Theme Functions ===
+
+        function getPalette() {
+            return CURRENT_PALETTE;
+        }
+
+        function setPalette(name) {
+            if (name in PALETTES) {
+                CURRENT_PALETTE = name;
+                applyPalette();
+                updateCurrentThemeDisplay();
+                return true;
+            } else {
+                throw new Error(`Invalid palette name: ${name}`);
+            }
+        }
+
+        function applyPalette() {
+            const palette = PALETTES[CURRENT_PALETTE];
+            const root = document.documentElement;
+            
+            // Apply all palette variables to CSS root
+            Object.entries(palette).forEach(([key, value]) => {
+                const cssVar = key === 'chat_bg' ? '--chat-bg' : `--${key.replace(/_/g, '-')}`;
+                root.style.setProperty(cssVar, value);
+            });
+            
+            console.log(`Applied ${CURRENT_PALETTE} theme`);
+        }
+
+        function refreshTheme() {
+            applyPalette();
+            console.log('Theme refreshed');
+        }
+
+        // === Helper Functions ===
+
+        function setTheme(themeName) {
+            try {
+                setPalette(themeName);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function updateCurrentThemeDisplay() {
+            const themeDisplay = document.getElementById('current-theme');
+            themeDisplay.textContent = `Current: ${CURRENT_PALETTE.charAt(0).toUpperCase() + CURRENT_PALETTE.slice(1)}`;
+        }
+
+        function animateProgress() {
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = '0%';
+            setTimeout(() => {
+                progressBar.style.width = '60%';
+            }, 100);
+        }
+
+        function selectItem(element) {
+            // Remove selected class from all items
+            document.querySelectorAll('.demo-list-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            // Add selected class to clicked item
+            element.classList.add('selected');
+        }
+
+        // === Optional: Helper Themed Widgets ===
+
+        function createThemedButton(text, onClick) {
+            const button = document.createElement('button');
+            button.className = 'demo-button';
+            button.textContent = text;
+            if (onClick) {
+                button.addEventListener('click', onClick);
+            }
+            return button;
+        }
+
+        function createThemedLabel(text, className = '') {
+            const label = document.createElement('div');
+            label.className = `demo-label ${className}`;
+            label.textContent = text;
+            return label;
+        }
+
+        // Initialize with light theme
+        document.addEventListener('DOMContentLoaded', function() {
+            setTheme('light');
+            
+            // Demo: Add a themed button dynamically
+            const demoSection = document.querySelector('.demo-section:nth-child(3)'); // Buttons section
+            const dynamicButton = createThemedButton('Dynamic Themed Button', function() {
+                alert('Dynamic button clicked!');
+            });
+            demoSection.appendChild(dynamicButton);
+            
+            // Demo: Add a themed label dynamically
+            const dynamicLabel = createThemedLabel('Dynamic Primary Label', 'primary');
+            document.querySelector('.demo-section:nth-child(2)').appendChild(dynamicLabel); // Labels section
+        });
+    </script>
+</body>
+</html>

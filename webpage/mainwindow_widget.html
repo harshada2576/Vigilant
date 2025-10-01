@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CipherLink Messenger</title>
+    <style>
+        /* Dark theme palette */
+        :root {
+            --background: #121212;
+            --primary-text: #EAEAEA;
+            --secondary-text: #9E9E9E;
+            --ui-borders: #2A2A2A;
+            --accent: #BB86FC;
+            --shadow: rgba(0,0,0,0.20);
+            --chat-bg: #571452;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+                Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--primary-text);
+            font-size: 14px;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Main Window Styles */
+        #main-window {
+            width: 100%;
+            height: 100vh;
+            display: none;
+            flex-direction: row;
+        }
+
+        /* Sidebar Styles */
+        #sidebar {
+            width: 200px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background-color: var(--background);
+            border-right: 1px solid var(--ui-borders);
+        }
+
+        #profile-label {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            border-bottom: 1px solid var(--ui-borders);
+        }
+
+        #sidebar-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .sidebar-button {
+            background-color: var(--accent);
+            color: white;
+            border-radius: 6px;
+            padding: 10px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sidebar-button:hover {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        /* Splitter Layout */
+        #splitter {
+            display: flex;
+            flex: 1;
+            height: 100%;
+        }
+
+        /* Chat List Styles */
+        #chat-list {
+            width: 280px;
+            max-width: 280px;
+            border-right: 1px solid var(--ui-borders);
+            background-color: var(--background);
+            color: var(--primary-text);
+            overflow-y: auto;
+        }
+
+        .chat-list-item {
+            padding: 15px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--ui-borders);
+            transition: background-color 0.2s;
+        }
+
+        .chat-list-item:hover {
+            background-color: rgba(187, 134, 252, 0.1);
+        }
+
+        .chat-list-item.selected {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        /* Chat Area Styles */
+        #chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+
+        #chat-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--ui-borders);
+        }
+
+        #chat-display {
+            flex: 1;
+            background-color: var(--chat-bg);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message-sender {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .message-time {
+            color: #888;
+            font-size: 10px;
+            margin-left: 5px;
+            float: right;
+        }
+
+        .message-content {
+            margin-top: 4px;
+        }
+
+        .own-message {
+            align-self: flex-end;
+            background-color: rgba(41, 121, 255, 0.2);
+            border: 1px solid rgba(41, 121, 255, 0.5);
+        }
+
+        .other-message {
+            align-self: flex-start;
+            background-color: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(0, 0, 0, 0.3);
+        }
+
+        #input-area {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #message-input {
+            flex: 1;
+            background-color: var(--background);
+            border: 1.5px solid var(--ui-borders);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 15px;
+            color: var(--primary-text);
+        }
+
+        #send-button {
+            background-color: var(--accent);
+            color: white;
+            border-radius: 6px;
+            padding: 12px 24px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #send-button:hover:not(:disabled) {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        #send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* New Chat Dialog Styles */
+        #new-chat-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            padding: 20px;
+            background-color: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        /* Settings Dialog Styles */
+        #settings-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 350px;
+            padding: 20px;
+            background-color: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .dialog-row {
+            margin-bottom: 15px;
+        }
+
+        .dialog-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .dialog-button {
+            background-color: var(--accent);
+            color: white;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
+
+        .dialog-button:hover {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+
+        .visible {
+            display: flex !important;
+        }
+
+        .block-visible {
+            display: block !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main Window -->
+    <div id="main-window" class="visible">
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div id="profile-label">User: placeholder</div>
+            <div id="sidebar-buttons">
+                <button id="new-chat-button" class="sidebar-button">New Chat</button>
+                <button id="settings-button" class="sidebar-button">Settings</button>
+                <button id="logout-button" class="sidebar-button">Logout</button>
+            </div>
+        </div>
+
+        <!-- Splitter -->
+        <div id="splitter">
+            <!-- Chat List -->
+            <div id="chat-list">
+                <div class="chat-list-item">General Chat</div>
+                <div class="chat-list-item">John Doe</div>
+                <div class="chat-list-item">Project Team</div>
+            </div>
+
+            <!-- Chat Area -->
+            <div id="chat-area">
+                <div id="chat-header">Select a chat</div>
+                <div id="chat-display">
+                    <div class="message other-message">
+                        <div class="message-sender">User 2</div>
+                        <div class="message-content">Hello there!</div>
+                        <span class="message-time">[10:30 AM]</span>
+                    </div>
+                    <div class="message own-message">
+                        <div class="message-sender">You</div>
+                        <div class="message-content">Hi! How are you doing?</div>
+                        <span class="message-time">[10:31 AM]</span>
+                    </div>
+                </div>
+                <div id="input-area">
+                    <input type="text" id="message-input" placeholder="Type a message...">
+                    <button id="send-button" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Chat Dialog -->
+    <div id="new-chat-dialog" class="hidden">
+        <div class="dialog-row">
+            <input type="checkbox" id="group-checkbox" checked>
+            <label for="group-checkbox">Group Chat</label>
+        </div>
+        <div class="dialog-row" id="chat-name-row">
+            <label for="chat-name-input">Chat Name:</label>
+            <input type="text" id="chat-name-input" placeholder="Enter chat name">
+        </div>
+        <div class="dialog-row">
+            <label for="participants-input">Usernames (comma separated):</label>
+            <input type="text" id="participants-input" placeholder="username1, username2">
+        </div>
+        <div class="dialog-buttons">
+            <button id="confirm-chat-button" class="dialog-button">Confirm</button>
+            <button id="cancel-chat-button" class="dialog-button">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Settings Dialog -->
+    <div id="settings-dialog" class="hidden">
+        <div class="dialog-row">
+            <h3>Settings</h3>
+        </div>
+        <div class="dialog-row">
+            <label for="theme-select">Theme:</label>
+            <select id="theme-select">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="medium">Medium</option>
+            </select>
+        </div>
+        <div class="dialog-row">
+            <label for="display-name-input">Display Name:</label>
+            <input type="text" id="display-name-input" placeholder="Enter display name">
+        </div>
+        <div class="dialog-buttons">
+            <button id="save-settings-button" class="dialog-button">Save</button>
+            <button id="cancel-settings-button" class="dialog-button">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // Application state
+        const appState = {
+            currentUser: "placeholder",
+            currentUserId: null,
+            currentChatId: null,
+            conversations: [],
+            messages: {}
+        };
+
+        // Helper: get token from localStorage
+        function getToken() {
+            return localStorage.getItem('cipherlink_token');
+        }
+
+        // Fetch current user info from backend
+        async function fetchCurrentUser() {
+            const token = getToken();
+            if (!token) return null;
+            try {
+                const response = await fetch('http://localhost:8000/me', {
+                    headers: { 'token': token }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        return data;
+                    }
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        // Fetch conversations from backend
+        async function fetchConversations() {
+            const token = getToken();
+            if (!token) return [];
+            try {
+                const response = await fetch('http://localhost:8000/get_conversation', {
+                    headers: { 'token': token }
+                });
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    return [];
+                }
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // DOM Elements
+        const mainWindow = document.getElementById('main-window');
+        const newChatDialog = document.getElementById('new-chat-dialog');
+        const settingsDialog = document.getElementById('settings-dialog');
+
+        // Main Window Elements
+        const profileLabel = document.getElementById('profile-label');
+        const chatList = document.getElementById('chat-list');
+        const chatHeader = document.getElementById('chat-header');
+        const chatDisplay = document.getElementById('chat-display');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const newChatButton = document.getElementById('new-chat-button');
+        const settingsButton = document.getElementById('settings-button');
+        const logoutButton = document.getElementById('logout-button');
+
+        // New Chat Dialog Elements
+        const groupCheckbox = document.getElementById('group-checkbox');
+        const chatNameRow = document.getElementById('chat-name-row');
+        const chatNameInput = document.getElementById('chat-name-input');
+        const participantsInput = document.getElementById('participants-input');
+        const confirmChatButton = document.getElementById('confirm-chat-button');
+        const cancelChatButton = document.getElementById('cancel-chat-button');
+
+        // Settings Dialog Elements
+        const themeSelect = document.getElementById('theme-select');
+        const displayNameInput = document.getElementById('display-name-input');
+        const saveSettingsButton = document.getElementById('save-settings-button');
+        const cancelSettingsButton = document.getElementById('cancel-settings-button');
+
+        // Initialize the application
+        async function init() {
+            setupEventListeners();
+            // Fetch user info from backend
+            const userInfo = await fetchCurrentUser();
+            if (userInfo && userInfo.user_id) {
+                appState.currentUserId = userInfo.user_id;
+                appState.currentUser = userInfo.user_id;
+            } else {
+                appState.currentUserId = null;
+                appState.currentUser = 'Unknown';
+            }
+            // Fetch conversations from backend
+            const conversations = await fetchConversations();
+            if (Array.isArray(conversations)) {
+                appState.conversations = conversations;
+            } else if (conversations && conversations.length) {
+                appState.conversations = conversations;
+            } else {
+                appState.conversations = [];
+            }
+            populateChatList();
+            updateProfileLabel();
+        }
+
+        // Set up all event listeners
+        function setupEventListeners() {
+            // Main window buttons
+            newChatButton.addEventListener('click', showNewChatDialog);
+            settingsButton.addEventListener('click', showSettingsDialog);
+            logoutButton.addEventListener('click', handleLogout);
+            
+            // Message input
+            messageInput.addEventListener('input', toggleSendButton);
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+            sendButton.addEventListener('click', sendMessage);
+
+            // New chat dialog
+            groupCheckbox.addEventListener('change', toggleGroupFields);
+            confirmChatButton.addEventListener('click', createNewChat);
+            cancelChatButton.addEventListener('click', hideNewChatDialog);
+
+            // Settings dialog
+            saveSettingsButton.addEventListener('click', saveSettings);
+            cancelSettingsButton.addEventListener('click', hideSettingsDialog);
+
+            // Chat list items
+            document.querySelectorAll('.chat-list-item').forEach(item => {
+                item.addEventListener('click', () => loadChat(item));
+            });
+        }
+
+        // Update profile label with current user
+        function updateProfileLabel() {
+            profileLabel.textContent = `User: ${appState.currentUser}`;
+        }
+
+        // Populate chat list
+        function populateChatList() {
+            chatList.innerHTML = '';
+            appState.conversations.forEach(conv => {
+                const item = document.createElement('div');
+                item.className = 'chat-list-item';
+                item.textContent = conv.name;
+                item.dataset.id = conv.id;
+                
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.chat-list-item').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+                    item.classList.add('selected');
+                    loadChat(item);
+                });
+                
+                chatList.appendChild(item);
+            });
+        }
+
+        // Load a specific chat
+        async function loadChat(item) {
+            const chatId = parseInt(item.dataset.id);
+            appState.currentChatId = chatId;
+            const conversation = appState.conversations.find(conv => conv.id === chatId);
+            chatHeader.textContent = `Chat: ${conversation.name}`;
+            chatDisplay.innerHTML = '';
+
+            // Fetch messages from backend
+            const token = getToken();
+            let messages = [];
+            if (token) {
+                try {
+                    const response = await fetch(`http://localhost:8000/get_messages?conversation_id=${chatId}`, {
+                        headers: { 'token': token }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && Array.isArray(data.messages)) {
+                            messages = data.messages;
+                        }
+                    }
+                } catch (e) {}
+            }
+            appState.messages[chatId] = messages;
+
+            if (messages.length) {
+                messages.forEach(msg => {
+                    const isOwnMessage = (msg.sender_id === appState.currentUserId);
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `message ${isOwnMessage ? 'own-message' : 'other-message'}`;
+                    const sender = isOwnMessage ? "You" : (msg.sender_display_name || `User ${msg.sender_id}`);
+                    messageDiv.innerHTML = `
+                        <div class=\"message-sender\">${sender}</div>
+                        <div class=\"message-content\">${msg.content}</div>
+                        <span class=\"message-time\">[${msg.timestamp}]</span>
+                    `;
+                    chatDisplay.appendChild(messageDiv);
+                });
+            }
+            chatDisplay.scrollTop = chatDisplay.scrollHeight;
+            messageInput.disabled = false;
+            toggleSendButton();
+        }
+
+        // Send a message
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !appState.currentChatId) return;
+            const token = getToken();
+            if (!token) return;
+            try {
+                const response = await fetch(`http://localhost:8000/send_message?conversation_id=${appState.currentChatId}&content=${encodeURIComponent(message)}`, {
+                    method: 'POST',
+                    headers: { 'token': token }
+                });
+                if (response.ok) {
+                    // Clear input and reload chat
+                    messageInput.value = '';
+                    toggleSendButton();
+                    await loadChat(document.querySelector(`.chat-list-item[data-id="${appState.currentChatId}"]`));
+                }
+            } catch (e) {}
+        }
+
+        // Toggle send button based on input
+        function toggleSendButton() {
+            sendButton.disabled = !messageInput.value.trim() || !appState.currentChatId;
+        }
+
+        // Show new chat dialog
+        function showNewChatDialog() {
+            newChatDialog.style.display = 'block';
+            toggleGroupFields();
+            setTimeout(() => {
+                if (groupCheckbox.checked) chatNameInput.focus();
+                else participantsInput.focus();
+            }, 100);
+        }
+
+        // Hide new chat dialog
+        function hideNewChatDialog() {
+            newChatDialog.style.display = 'none';
+            chatNameInput.value = '';
+            participantsInput.value = '';
+            groupCheckbox.checked = true;
+        }
+
+        // Show settings dialog
+        function showSettingsDialog() {
+            displayNameInput.value = appState.currentUser;
+            settingsDialog.style.display = 'block';
+        }
+
+        // Hide settings dialog
+        function hideSettingsDialog() {
+            settingsDialog.style.display = 'none';
+        }
+
+        // Toggle group chat fields
+        function toggleGroupFields() {
+            const isGroup = groupCheckbox.checked;
+            chatNameRow.style.display = isGroup ? 'block' : 'none';
+        }
+
+        // Create new chat
+        function createNewChat() {
+            const isGroup = groupCheckbox.checked;
+            const chatName = chatNameInput.value.trim();
+            const participantsText = participantsInput.value.trim();
+            
+            if (!participantsText) {
+                alert('Please enter at least one participant username.');
+                return;
+            }
+            
+            const participants = participantsText.split(',').map(p => p.trim()).filter(p => p);
+            
+            if (participants.length === 0) {
+                alert('Please enter at least one valid participant username.');
+                return;
+            }
+            
+            if (isGroup && !chatName) {
+                alert('Please enter a chat name for group chats.');
+                return;
+            }
+            
+            // Create new conversation
+            const newConv = {
+                id: Math.max(...appState.conversations.map(c => c.id)) + 1,
+                name: isGroup ? chatName : participants[0]
+            };
+            
+            appState.conversations.push(newConv);
+            
+            // Initialize empty messages array
+            appState.messages[newConv.id] = [];
+            
+            // Update UI
+            populateChatList();
+            hideNewChatDialog();
+            
+            // Select the new chat
+            setTimeout(() => {
+                const newChatItem = document.querySelector(`.chat-list-item[data-id="${newConv.id}"]`);
+                if (newChatItem) {
+                    newChatItem.click();
+                }
+            }, 100);
+            
+            alert('Chat created successfully!');
+        }
+
+        // Save settings
+        function saveSettings() {
+            const newDisplayName = displayNameInput.value.trim();
+            const theme = themeSelect.value;
+            
+            if (newDisplayName) {
+                appState.currentUser = newDisplayName;
+                updateProfileLabel();
+            }
+            
+            // Apply theme (simplified - in real app you'd update CSS variables)
+            console.log(`Theme changed to: ${theme}`);
+            
+            alert('Settings saved successfully!');
+            hideSettingsDialog();
+        }
+
+        // Handle logout
+        function handleLogout() {
+            if (confirm('Are you sure you want to logout?')) {
+                // Clear application state
+                appState.currentChatId = null;
+                
+                // Reset UI
+                chatHeader.textContent = 'Select a chat';
+                chatDisplay.innerHTML = '';
+                messageInput.value = '';
+                sendButton.disabled = true;
+                
+                // Deselect any selected chat
+                document.querySelectorAll('.chat-list-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                
+                alert('Logged out successfully!');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

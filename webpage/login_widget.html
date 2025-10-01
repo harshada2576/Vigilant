@@ -17,28 +17,47 @@
     <login-widget>Fallback: If you see this, JS may be disabled or there's an error.</login-widget>
 
     <script>
-        // Dummy backend functions (replace with actual implementations as needed)
-        function verify_user(username, password) {
-            // Simulate verification
-            if (username === "admin" && password === "password") {
-                return { success: true, message: "Login successful!", token: "dummy_token" };
-            } else {
-                return { success: false, message: "Invalid credentials." };
+
+        // Real backend API functions
+        async function verify_user(username, password) {
+            try {
+                const response = await fetch('http://localhost:8000/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    const error = await response.json();
+                    return { success: false, message: error.detail || "Login failed." };
+                }
+            } catch (e) {
+                return { success: false, message: 'Network error: ' + e.message };
             }
         }
 
-        function register_user(username, password, display_name) {
-            // Simulate registration
-            if (username && password) {
-                return { success: true, message: "Registration successful!" };
-            } else {
-                return { success: false, message: "Registration failed." };
+        async function register_user(username, password, display_name) {
+            try {
+                const response = await fetch('http://localhost:8000/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, display_name })
+                });
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    const error = await response.json();
+                    return { success: false, message: error.detail || "Registration failed." };
+                }
+            } catch (e) {
+                return { success: false, message: 'Network error: ' + e.message };
             }
         }
 
         function store_encrypted_session(token) {
-            // Simulate storing session
-            console.log("Stored encrypted session:", token);
+            // Store token in localStorage for now
+            localStorage.setItem('cipherlink_token', token);
         }
 
         // Define color palettes (from theme.py)

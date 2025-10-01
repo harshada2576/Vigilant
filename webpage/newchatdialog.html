@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Chat - CipherLink Messenger</title>
+    <style>
+        /* Dark theme palette */
+        :root {
+            --background: #121212;
+            --primary-text: #EAEAEA;
+            --secondary-text: #9E9E9E;
+            --ui-borders: #2A2A2A;
+            --accent: #BB86FC;
+            --shadow: rgba(0,0,0,0.20);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+                Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--primary-text);
+            font-size: 14px;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* New Chat Dialog Styles */
+        .dialog-container {
+            width: 300px;
+            background-color: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px var(--shadow);
+            overflow: hidden;
+        }
+
+        .dialog-header {
+            background-color: var(--accent);
+            color: white;
+            padding: 15px 20px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .dialog-content {
+            padding: 20px;
+        }
+
+        .dialog-row {
+            margin-bottom: 15px;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent);
+        }
+
+        .checkbox-row label {
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--primary-text);
+        }
+
+        .form-group input {
+            width: 100%;
+            background-color: var(--background);
+            border: 1.5px solid var(--ui-borders);
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 14px;
+            color: var(--primary-text);
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-group input::placeholder {
+            color: var(--secondary-text);
+        }
+
+        .button-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .dialog-button {
+            flex: 1;
+            background-color: var(--accent);
+            color: white;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dialog-button:hover {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        .dialog-button:active {
+            transform: translateY(1px);
+        }
+
+        .dialog-button.cancel {
+            background-color: transparent;
+            border: 1.5px solid var(--ui-borders);
+            color: var(--primary-text);
+        }
+
+        .dialog-button.cancel:hover {
+            background-color: var(--ui-borders);
+        }
+
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- New Chat Dialog -->
+    <div class="dialog-container">
+        <div class="dialog-header">
+            New Chat
+        </div>
+        <div class="dialog-content">
+            <div class="checkbox-row">
+                <input type="checkbox" id="group-checkbox" checked>
+                <label for="group-checkbox">Group Chat</label>
+            </div>
+
+            <div class="form-group" id="chat-name-group">
+                <label for="chat-name-input">Chat Name:</label>
+                <input type="text" id="chat-name-input" placeholder="Enter chat name">
+            </div>
+
+            <div class="form-group">
+                <label for="participants-input">Usernames (comma separated):</label>
+                <input type="text" id="participants-input" placeholder="username1, username2, username3">
+            </div>
+
+            <div class="button-row">
+                <button class="dialog-button cancel" id="cancel-button">Cancel</button>
+                <button class="dialog-button" id="confirm-button">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo Output Area -->
+    <div id="output" style="position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; max-width: 300px; display: none;">
+        <h4 style="margin-bottom: 10px; color: var(--accent);">Dialog Output:</h4>
+        <pre id="output-content" style="font-size: 12px; color: var(--primary-text);"></pre>
+    </div>
+
+    <script>
+        // DOM Elements
+        const groupCheckbox = document.getElementById('group-checkbox');
+        const chatNameGroup = document.getElementById('chat-name-group');
+        const chatNameInput = document.getElementById('chat-name-input');
+        const participantsInput = document.getElementById('participants-input');
+        const confirmButton = document.getElementById('confirm-button');
+        const cancelButton = document.getElementById('cancel-button');
+        const output = document.getElementById('output');
+        const outputContent = document.getElementById('output-content');
+
+        // Initialize the dialog
+        function init() {
+            setupEventListeners();
+            toggleGroupFields(); // Set initial state
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            groupCheckbox.addEventListener('change', toggleGroupFields);
+            confirmButton.addEventListener('click', handleConfirm);
+            cancelButton.addEventListener('click', handleCancel);
+            
+            // Enter key support
+            chatNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleConfirm();
+            });
+            
+            participantsInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleConfirm();
+            });
+        }
+
+        // Toggle group chat fields - Exact replica of PyQt5 toggle_group_fields
+        function toggleGroupFields() {
+            const isGroup = groupCheckbox.checked;
+            chatNameGroup.style.display = isGroup ? 'block' : 'none';
+            
+            // Update placeholder based on group status
+            if (!isGroup) {
+                participantsInput.placeholder = "Enter username";
+            } else {
+                participantsInput.placeholder = "username1, username2, username3";
+            }
+        }
+
+        // Get dialog info - Exact replica of PyQt5 get_info method
+        function getInfo() {
+            const isGroup = groupCheckbox.checked;
+            const chatName = isGroup ? chatNameInput.value.trim() : null;
+            const participantsText = participantsInput.value.trim();
+            const participants = participantsText.split(',').map(user => user.trim()).filter(user => user);
+            
+            return {
+                isGroup: isGroup,
+                chatName: chatName,
+                participants: participants
+            };
+        }
+
+        // Handle confirm button click
+        function handleConfirm() {
+            const info = getInfo();
+            
+            // Validation
+            if (info.participants.length === 0) {
+                alert('Please enter at least one participant username.');
+                return;
+            }
+            
+            if (info.isGroup && !info.chatName) {
+                alert('Please enter a chat name for group chats.');
+                return;
+            }
+            
+            // Show output (in real app, this would create the chat)
+            showOutput(info);
+            
+            // Reset form for next use
+            resetForm();
+        }
+
+        // Handle cancel button click
+        function handleCancel() {
+            resetForm();
+            showOutput({ action: 'canceled' });
+        }
+
+        // Reset form to initial state
+        function resetForm() {
+            chatNameInput.value = '';
+            participantsInput.value = '';
+            groupCheckbox.checked = true;
+            toggleGroupFields();
+        }
+
+        // Show output for demo purposes
+        function showOutput(info) {
+            outputContent.textContent = JSON.stringify(info, null, 2);
+            output.style.display = 'block';
+            
+            // Auto-hide output after 5 seconds
+            setTimeout(() => {
+                output.style.display = 'none';
+            }, 5000);
+        }
+
+        // Initialize the dialog when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
