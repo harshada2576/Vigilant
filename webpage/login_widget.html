@@ -17,11 +17,13 @@
     <login-widget>Fallback: If you see this, JS may be disabled or there's an error.</login-widget>
 
     <script>
+    // Set API base URL for Codespaces or local
+    const API_BASE = window.API_BASE || "http://localhost:8000";
 
         // Real backend API functions
         async function verify_user(username, password) {
             try {
-                const response = await fetch('http://localhost:8000/login', {
+                const response = await fetch(`${API_BASE}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
@@ -29,8 +31,13 @@
                 if (response.ok) {
                     return await response.json();
                 } else {
-                    const error = await response.json();
-                    return { success: false, message: error.detail || "Login failed." };
+                    let errorText = await response.text();
+                    let errorMsg = "Login failed.";
+                    try {
+                        const error = JSON.parse(errorText);
+                        errorMsg = error.detail || errorText;
+                    } catch { errorMsg = errorText; }
+                    return { success: false, message: errorMsg };
                 }
             } catch (e) {
                 return { success: false, message: 'Network error: ' + e.message };
@@ -39,7 +46,7 @@
 
         async function register_user(username, password, display_name) {
             try {
-                const response = await fetch('http://localhost:8000/register', {
+                const response = await fetch(`${API_BASE}/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password, display_name })
@@ -47,8 +54,13 @@
                 if (response.ok) {
                     return await response.json();
                 } else {
-                    const error = await response.json();
-                    return { success: false, message: error.detail || "Registration failed." };
+                    let errorText = await response.text();
+                    let errorMsg = "Registration failed.";
+                    try {
+                        const error = JSON.parse(errorText);
+                        errorMsg = error.detail || errorText;
+                    } catch { errorMsg = errorText; }
+                    return { success: false, message: errorMsg };
                 }
             } catch (e) {
                 return { success: false, message: 'Network error: ' + e.message };

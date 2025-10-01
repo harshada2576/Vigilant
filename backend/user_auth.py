@@ -94,8 +94,6 @@ def verify_user(username, password):
     except Exception as e:
         return {"success": False, "message": f"login error: {str(e)}"}
 
-<<<<<<< HEAD
-=======
 def create_session(user_id, duration_minutes=60):
     session_token = generate_session_token()
     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)).isoformat()
@@ -127,5 +125,3 @@ def logout_user(token):
     conn.commit()
 
     helper.clear_session()
-
->>>>>>> star
