@@ -41,3 +41,14 @@
 2025-09-27 15:17:11,786 - INFO - Login attempt for test
 2025-09-27 15:17:13,886 - INFO - Get conversation attempt for (4, 'test')
 2025-09-27 15:17:26,266 - INFO - Logout attempt for (4, 'test')
+2025-10-01 21:31:12,332 - INFO - Login attempt for test
+2025-10-01 21:31:14,730 - INFO - Get conversation attempt for (4, 'test')
+2025-10-01 21:48:53,381 - INFO - Login attempt for test
+2025-10-01 21:48:55,447 - INFO - Get conversation attempt for (4, 'test')
+2025-10-01 21:49:21,100 - INFO - Login attempt for ahmed
+2025-10-01 21:49:22,589 - INFO - Register attempt for ahmed
+2025-10-01 21:49:36,555 - INFO - Login attempt for ahmed
+2025-10-01 21:49:38,523 - INFO - Get conversation attempt for (5, 'ahmed')
+2025-10-01 21:54:17,350 - INFO - Login attempt for test
+2025-10-01 21:54:21,615 - INFO - Get conversation attempt for (4, 'test')
+2025-10-01 21:54:31,161 - INFO - Logout attempt for (4, 'test')
