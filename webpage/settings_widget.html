@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - CipherLink Messenger</title>
+    <style>
+        /* Dark theme palette */
+        :root {
+            --background: #121212;
+            --primary-text: #EAEAEA;
+            --secondary-text: #9E9E9E;
+            --ui-borders: #2A2A2A;
+            --accent: #BB86FC;
+            --shadow: rgba(0,0,0,0.20);
+            --group-bg: #1E1E1E;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+                Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--primary-text);
+            font-size: 14px;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Settings Container */
+        .settings-container {
+            width: 450px;
+            min-height: 400px;
+            background-color: var(--background);
+            border: 1px solid var(--ui-borders);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px var(--shadow);
+            overflow: hidden;
+        }
+
+        .settings-header {
+            background-color: var(--accent);
+            color: white;
+            padding: 15px 20px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .settings-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Group Box Styles */
+        .group-box {
+            background-color: var(--group-bg);
+            border: 1px solid var(--ui-borders);
+            border-radius: 6px;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .group-title {
+            background-color: rgba(187, 134, 252, 0.1);
+            padding: 12px 15px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--ui-borders);
+        }
+
+        .group-content {
+            padding: 15px;
+        }
+
+        /* Form Styles */
+        .form-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-row label {
+            width: 120px;
+            font-weight: 500;
+            color: var(--primary-text);
+        }
+
+        .form-row input {
+            flex: 1;
+            background-color: var(--background);
+            border: 1.5px solid var(--ui-borders);
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 14px;
+            color: var(--primary-text);
+            transition: border-color 0.2s;
+        }
+
+        .form-row input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-row input::placeholder {
+            color: var(--secondary-text);
+        }
+
+        /* Checkbox Styles */
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent);
+        }
+
+        .checkbox-row label {
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        /* Button Styles */
+        .button-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .settings-button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .settings-button.save {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .settings-button.save:hover {
+            background-color: var(--primary-text);
+            color: var(--background);
+        }
+
+        .settings-button.cancel {
+            background-color: transparent;
+            border: 1.5px solid var(--ui-borders);
+            color: var(--primary-text);
+        }
+
+        .settings-button.cancel:hover {
+            background-color: var(--ui-borders);
+        }
+
+        /* Status Message */
+        .status-message {
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .status-message.success {
+            background-color: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            color: #4CAF50;
+            display: block;
+        }
+
+        .status-message.error {
+            background-color: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            color: #f44336;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Settings Widget -->
+    <div class="settings-container">
+        <div class="settings-header">
+            Settings
+        </div>
+        
+        <div class="settings-content">
+            <!-- Profile Settings Group -->
+            <div class="group-box">
+                <div class="group-title">Profile Settings</div>
+                <div class="group-content">
+                    <div class="form-layout">
+                        <div class="form-row">
+                            <label for="display-name">Display Name:</label>
+                            <input type="text" id="display-name" placeholder="Enter display name">
+                        </div>
+                        <div class="form-row">
+                            <label for="email">Email:</label>
+                            <input type="email" id="email" placeholder="Enter email address">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Password Group -->
+            <div class="group-box">
+                <div class="group-title">Change Password</div>
+                <div class="group-content">
+                    <div class="form-layout">
+                        <div class="form-row">
+                            <label for="old-password">Old Password:</label>
+                            <input type="password" id="old-password" placeholder="Enter current password">
+                        </div>
+                        <div class="form-row">
+                            <label for="new-password">New Password:</label>
+                            <input type="password" id="new-password" placeholder="Enter new password">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appearance Group -->
+            <div class="group-box">
+                <div class="group-title">Appearance</div>
+                <div class="group-content">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="dark-mode" checked>
+                        <label for="dark-mode">Enable Dark Mode</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Message -->
+            <div id="status-message" class="status-message"></div>
+
+            <!-- Buttons -->
+            <div class="button-row">
+                <button class="settings-button cancel" id="cancel-button">Cancel</button>
+                <button class="settings-button save" id="save-button">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application state
+        const appState = {
+            username: 'current_user', // This would come from your auth system
+            currentTheme: 'dark'
+        };
+
+        // DOM Elements
+        const displayNameInput = document.getElementById('display-name');
+        const emailInput = document.getElementById('email');
+        const oldPasswordInput = document.getElementById('old-password');
+        const newPasswordInput = document.getElementById('new-password');
+        const darkModeCheckbox = document.getElementById('dark-mode');
+        const saveButton = document.getElementById('save-button');
+        const cancelButton = document.getElementById('cancel-button');
+        const statusMessage = document.getElementById('status-message');
+
+        // Initialize the settings widget
+        function init() {
+            setupEventListeners();
+            loadProfile(); // Load current user data
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            saveButton.addEventListener('click', saveSettings);
+            cancelButton.addEventListener('click', handleCancel);
+            
+            // Enter key support
+            [displayNameInput, emailInput, oldPasswordInput, newPasswordInput].forEach(input => {
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') saveSettings();
+                });
+            });
+        }
+
+        // Load profile data - Equivalent to PyQt5 load_profile()
+        function loadProfile() {
+            // In a real app, this would fetch from your backend API
+            // For demo purposes, we'll use mock data
+            const mockUserData = {
+                display_name: 'John Doe',
+                email: 'john.doe@example.com'
+            };
+            
+            displayNameInput.value = mockUserData.display_name || '';
+            emailInput.value = mockUserData.email || '';
+            darkModeCheckbox.checked = appState.currentTheme === 'dark';
+        }
+
+        // Save settings - Equivalent to PyQt5 save_settings()
+        async function saveSettings() {
+            const displayName = displayNameInput.value.trim();
+            const email = emailInput.value.trim();
+            const oldPassword = oldPasswordInput.value;
+            const newPassword = newPasswordInput.value;
+            const darkMode = darkModeCheckbox.checked;
+
+            // Clear previous status
+            statusMessage.className = 'status-message';
+            statusMessage.textContent = '';
+
+            try {
+                // Update profile info
+                const profileData = {
+                    display_name: displayName,
+                    email: email,
+                    username: appState.username
+                };
+
+                // Change password if requested
+                if (oldPassword && newPassword) {
+                    // In a real app, this would verify old password with bcrypt
+                    if (!await verifyOldPassword(oldPassword)) {
+                        showStatus('Old password is incorrect.', 'error');
+                        return;
+                    }
+                    
+                    // Update password (in real app, this would hash with bcrypt)
+                    profileData.password_hash = await hashPassword(newPassword);
+                }
+
+                // Save to backend (mock implementation)
+                await saveToBackend(profileData);
+
+                // Apply theme
+                appState.currentTheme = darkMode ? 'dark' : 'light';
+                applyTheme(appState.currentTheme);
+
+                showStatus('Settings saved successfully!', 'success');
+                
+                // Clear password fields
+                oldPasswordInput.value = '';
+                newPasswordInput.value = '';
+
+            } catch (error) {
+                showStatus('Error saving settings: ' + error.message, 'error');
+            }
+        }
+
+        // Mock backend functions - Replace with actual API calls
+        async function verifyOldPassword(password) {
+            // In real app, this would call your backend to verify the old password
+            // Using bcrypt.compare() on the server side
+            return new Promise(resolve => {
+                setTimeout(() => resolve(password === 'current_password'), 100);
+            });
+        }
+
+        async function hashPassword(password) {
+            // In real app, this would use bcrypt on the server side
+            return new Promise(resolve => {
+                setTimeout(() => resolve('hashed_' + password), 100);
+            });
+        }
+
+        async function saveToBackend(data) {
+            // In real app, this would be your API call
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    console.log('Saving to backend:', data);
+                    resolve(true);
+                }, 500);
+            });
+        }
+
+        // Apply theme - Equivalent to PyQt5 theme functions
+        function applyTheme(theme) {
+            const root = document.documentElement;
+            
+            if (theme === 'dark') {
+                root.style.setProperty('--background', '#121212');
+                root.style.setProperty('--primary-text', '#EAEAEA');
+                root.style.setProperty('--secondary-text', '#9E9E9E');
+                root.style.setProperty('--ui-borders', '#2A2A2A');
+                root.style.setProperty('--group-bg', '#1E1E1E');
+            } else {
+                root.style.setProperty('--background', '#FAFAFA');
+                root.style.setProperty('--primary-text', '#212121');
+                root.style.setProperty('--secondary-text', '#616161');
+                root.style.setProperty('--ui-borders', '#E0E0E0');
+                root.style.setProperty('--group-bg', '#FFFFFF');
+            }
+            
+            console.log(`Theme changed to: ${theme}`);
+        }
+
+        // Handle cancel
+        function handleCancel() {
+            // Reset form to original values
+            loadProfile();
+            oldPasswordInput.value = '';
+            newPasswordInput.value = '';
+            statusMessage.className = 'status-message';
+            statusMessage.textContent = '';
+            
+            console.log('Settings changes canceled');
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            
+            // Auto-hide success messages after 3 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusMessage.className = 'status-message';
+                    statusMessage.textContent = '';
+                }, 3000);
+            }
+        }
+
+        // Initialize the settings widget
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
