@@ -1,7 +1,0 @@
-bcrypt
-uvicorn
-keyring
-fastapi
-pydantic
-python-dotenv
-cryptography
