@@ -1,0 +1,18 @@
+# Cargo / Rust
+**/target/
+Cargo.lock
+
+# Logs
+*.log
+**/*.log
+
+# E2EE Client Persistent States & Sessions (Sensitive)
+**/matrix_store_*/
+**/session_*.json
+
+# Docker Volumes & Databases (Synapse, Postgres, and configs)
+postgres-data/
+synapse-data/
+caddy-data/
+caddy-config/
+

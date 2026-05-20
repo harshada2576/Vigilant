@@ -1,0 +1,4 @@
+localhost:8443, cipherlink.local:8443 {
+    tls internal
+    reverse_proxy synapse:8008
+}
