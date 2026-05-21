@@ -1,0 +1,18 @@
+[package]
+name = "daemon"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+matrix-sdk = "0.17.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", features = ["raw_value"] }
+tokio = { version = "1.52.3", features = ["full"] }
+rpassword = "7.3"
+futures = "0.3"
+chacha20poly1305 = "0.10.1"
+pbkdf2 = "0.12.2"
+sha2 = "0.10.9"
+rand = "0.8.6"
+rand_core = "0.6.4"
