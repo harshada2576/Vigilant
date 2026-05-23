@@ -1,0 +1,19 @@
+# CipherLink Overhaul Tasks
+
+## Phase 1: Infrastructure (Synapse Homeserver)
+- [x] Create `docker-compose.yml` for Synapse and PostgreSQL
+- [x] Generate initial `homeserver.yaml` configuration
+- [x] Configure `homeserver.yaml` for local isolation (disable federation, configure DB)
+- [x] Spin up Docker containers
+- [x] Verify Synapse server is running (check `/_matrix/client/versions` endpoint)
+
+## Phase 2: Rust Genesis (Client Initialization)
+- [x] Initialize Cargo project (`cargo init`)
+- [x] Add dependencies (`matrix-rust-sdk`, `tokio`, etc.)
+- [x] Implement basic Matrix authentication logic in Rust
+- [x] Test authentication against local Synapse server
+
+## Phase 3: The Cryptography & Bridging
+- [x] Enable E2EE in Rust client
+- [x] Implement device verification flow
+- [x] Verify E2EE messages are sent and encrypted in database
