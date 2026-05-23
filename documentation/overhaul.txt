@@ -1,0 +1,27 @@
+**The CipherLink Overhaul: Hard Reset Game Plan**
+
+We are officially trashing the old 1st-year playground backend. We are upgrading CipherLink into a production-grade, decentralized, and heavily encrypted communication node. This is a pure systems and cybersecurity engineering project now—no JavaScript, no reinventing the wheel on basic routing.
+
+**The Tech Stack & Architecture**
+
+* **The Protocol (Matrix):** We are adopting the Matrix open standard. It’s an HTTP/JSON API protocol for secure, federated chat. We stop building an isolated island and start speaking a universal standard.
+* **The Backend (Synapse):** We are dropping the custom relay server. Instead, we will host **Synapse** locally. It’s a mature, battle-tested homeserver that acts as our database and routing engine. We own the server and all the data.
+* **The Client (Rust):** We are building the actual CipherLink app in Rust using the `matrix-rust-sdk`. It gives us memory safety and handles the insanely complex cryptographic math natively. We can keep it minimalist and build it strictly as a fast terminal-based client.
+
+**The Cybersecurity (E2EE)**
+This is where it becomes a serious portfolio piece. We are implementing true End-to-End Encryption.
+
+* **Text (The Double Ratchet):** We are using the exact same math as Signal and WhatsApp (X3DH and the Double Ratchet algorithm). Every single message generates a brand new encryption key. The Synapse server is "zero-knowledge"—even if our local database is dumped, it's just scrambled ciphertext.
+* **Media (Out-of-Band Exchange):** For files/images, we aren't shoving them through the ratchet. The app will encrypt the file locally with AES-256, upload the scrambled binary blob to the server, and only send the AES key through the encrypted chat pipe.
+
+**Bridging**
+Because Matrix is open, we can run bridge services (like `mautrix-whatsapp` or `mautrix-discord`) next to Synapse. These bridges translate standard Matrix JSON into proprietary WebSockets.
+
+* **The Result:** We can use our custom Rust CLI app to natively reply to people who are texting us from standard WhatsApp or Discord. All our chats route through the secure server we built.
+
+**The Roadmap**
+This perfectly maps to our core OS, Networking, and DBMS concepts. Here is the phase rollout:
+
+1. **Infrastructure:** Spin up the Synapse server locally on Arch, configure the database, and verify it routes traffic using a standard test client.
+2. **Rust Genesis:** Initialize the Cargo project, import the SDK, and write the core logic to authenticate a user against the local server.
+3. **The Cryptography:** Turn on E2EE, handle device verification, and finalize the secure payload delivery.
