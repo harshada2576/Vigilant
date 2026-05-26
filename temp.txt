@@ -1,0 +1,47 @@
+│►   temp [E2EE]                        ││> /list                                                                                     │
+│    E2EETestRoom [E2EE]                ││Joined rooms:                                                                               │
+│                                       ││  E2EETestRoom - !vibdoFXQWqjRwURmRd:cipherlink.local (Encrypted)                           │
+│● SESSION DEVICES                      ││  temp - !WgkuyaMaHNxAQxFiCc:cipherlink.local (Encrypted)                                   │
+│  None (run /devices <user>)           ││> /invite                                                                                   │
+│                                       ││Usage: /invite <room_id> <user_id>                                                          │
+│                                       ││> /invite !WgkuyaMaHNxAQxFiCc:cipherlink.local @testuser2:cipherlink.local                  │
+│                                       ││Inviting @testuser2:cipherlink.local to room !WgkuyaMaHNxAQxFiCc:cipherlink.local...        │
+│                                       ││Invitation sent successfully!                                                               │
+│                                       ││[temp] @testuser2:cipherlink.local: hello                                                   │
+│                                       ││[To temp] hi                                                                                │
+│                                       ││Message sent! Event ID: $dkKKQrbaiAagNXyMZq9nYbS7wx7o7v5QV1FqBw0PuAk                        │
+│                                       ││[temp] @testuser:cipherlink.local: hi                                                       │
+│                                       ││[temp] @testuser2:cipherlink.local: how are you !                                           │
+│                                       ││[To temp] im fine thank ou !                                                                │
+│                                       ││Message sent! Event ID: $LZ5hQLGRnqB-xsgufQ4l9EAChwOa2pO1-_ZL-aqj7f4                        │
+│                                       ││[temp] @testuser:cipherlink.local: im fine thank ou !                                       │
+│                                       ││> /p2p hello                                                                                │
+│                                       ││Publishing P2P message: 'hello'...                                                          │
+│                                       ││Failed to publish P2P message: InsufficientPeers                                            │
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
