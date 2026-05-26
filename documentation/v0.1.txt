@@ -1,0 +1,157 @@
+# CipherLink End-to-End Encryption (E2EE) & Verification Walkthrough
+
+We have successfully implemented and verified full **End-to-End Encrypted (E2EE) messaging and device verification** in the CipherLink secure CLI client.
+
+## What Was Done
+
+### 1. Verification Protocol Overhaul
+Since the local isolated Synapse Homeserver does not have cross-signing configuration, standard identity-based verification checks (`get_user_identity()`) return `None`. We overhauled the verification flow to fetch devices directly:
+*   **Target Devices Directly**: Modified `/verify` to request verification on the other user's active devices using `client.encryption().get_user_devices(user_id)`.
+*   **Asynchronous Emoji/SAS Polling**: Added `start_emoji_polling` which runs a background task for 60 seconds, polls for the active `SasVerification` state, automatically calls `sas.accept().await` if not accepted, displays emojis once keys are shared, and logs E2EE completion status.
+*   **Device Status Verification**: Added `/devices <user_id>` command so that clients can check E2EE verification status of all device keys associated with a user ID.
+
+### 2. Verification Protocol Execution
+We executed verification between `@testuser:cipherlink.local` and `@alice:cipherlink.local`:
+1.  **Request Verification**: `/verify @alice:cipherlink.local` from `testuser`.
+2.  **Accept Request**: `/accept @testuser:cipherlink.local <flow_id>` from `alice`.
+3.  **SAS Handshake & Emojis**: Both devices automatically exchanged keys and displayed identical emojis:
+    ```
+    🚂 (Train)
+    🔑 (Key)
+    ☂️ (Umbrella)
+    🐎 (Horse)
+    🎩 (Hat)
+    ✂️ (Scissors)
+    🐓 (Rooster)
+    ```
+4.  **Confirm SAS**: Both clients issued `/confirm` and the SAS verification completed successfully.
+5.  **State Persistence**: The local SQLite database stores verification keys, which successfully persists across CLI client sessions. Verified device status is visible via `/devices`.
+
+---
+
+## Verification & Output
+
+### 1. Verified Device Status
+Checking devices from `@testuser:cipherlink.local` confirms Alice's device is verified:
+```
+> /devices @alice:cipherlink.local
+Fetching devices for @alice:cipherlink.local...
+Devices for user @alice:cipherlink.local:
+  - Device ID: GBBZTWGCEP, Verified: true
+```
+
+Checking devices from `@alice:cipherlink.local` confirms Testuser's device is verified:
+```
+> /devices @testuser:cipherlink.local
+Fetching devices for @testuser:cipherlink.local...
+Devices for user @testuser:cipherlink.local:
+  - Device ID: MYALJQODWJ, Verified: true
+```
+
+### 2. Encrypted Messages in Postgres
+Messages sent inside the room remain encrypted in transit and in storage. In the PostgreSQL container, the database table `event_json` stores the payloads securely under type `m.room.encrypted`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Security Audit Simulation Report: Attack Scenarios on CipherLink
+
+This document simulates and logs a professional hacker's attempts to compromise the CipherLink E2EE messaging platform, analyzing what succeeded, what failed, and how the architecture held up under attack.
+
+---
+
+## Attack Vector 1: Passive Database Exfiltration
+* **Attacker Profile**: Malicious database administrator or network attacker with read access to the PostgreSQL server.
+* **Goal**: Read private chat logs directly from the database.
+
+### Attack Steps
+1. The attacker executes a dump of the PostgreSQL `event_json` table containing room events:
+   ```sql
+   SELECT event_id, room_id, sender, type, content FROM event_json;
+   ```
+2. The attacker filters for messages sent in the encrypted room (`!vibdoFXQWqjRwURmRd:cipherlink.local`).
+
+### Attack Results
+* **Analysis**: The attacker successfully retrieves the rows, but the `type` column displays `m.room.encrypted`. The message body contains a ciphered payload (Megolm session ciphertext), initialization vectors, and cryptographic signatures.
+* **Status**: **FAILED**. Without the Megolm session keys (which exist only inside the client-side SQLite stores of `testuser` and `alice`), the database records are cryptographically useless to the attacker.
+
+---
+
+## Attack Vector 2: Network Sniffing & MitM Session Capture
+* **Attacker Profile**: Local network attacker executing ARP spoofing or sniffing packets on the local gateway.
+* **Goal**: Intercept message contents and hijack sessions.
+
+### Attack Steps
+1. The attacker sniffs traffic on port `8008` (Synapse default port) using `tcpdump` or Wireshark:
+   ```bash
+   tcpdump -i any port 8008 -A
+   ```
+2. The attacker monitors transit data during user login and room synchronization.
+
+### Attack Results
+* **E2EE Messages**: **SECURE**. The message payloads are encrypted inside the client application before transmission, preventing plaintext interception.
+* **Metadata & Auth Tokens**: **COMPROMISED**. Because the Synapse Homeserver is deployed using plain HTTP (port 8008) instead of HTTPS, the login credentials (`CIPHERLINK_PASS`) and API `access_token` are transmitted in plaintext. The attacker can capture the auth token and make API calls on behalf of the user.
+* **Status**: **PARTIAL SUCCESS**. E2EE message bodies remain secure, but credentials/metadata are vulnerable due to the lack of transport layer security (TLS).
+
+---
+
+## Attack Vector 3: Local SQLite Store Recovery
+* **Attacker Profile**: Adversary with physical or local system access to the user's host machine.
+* **Goal**: Recover decryption keys or forge user messages.
+
+### Attack Steps
+1. The attacker targets the local SQLite directory `matrix_store_testuser` and session configuration `session_testuser.json`.
+2. The attacker copies these files to their own machine:
+   ```bash
+   cp -r /home/seucra/Runes/projects/CipherLink/client/matrix_store_testuser /tmp/exfil/
+   cp /home/seucra/Runes/projects/CipherLink/client/session_testuser.json /tmp/exfil/
+   ```
+
+### Attack Results
+* **Analysis**: Because the local SQLite stores (`matrix_store_*`) are not encrypted on disk, the attacker gains direct access to:
+  * Restored credentials and access tokens.
+  * Megolm/Olm private identity keys, pre-keys, and session keys.
+* **Status**: **SUCCESS**. The attacker can run their own instance of the client pointing to these exfiltrated databases, bypass registration, and read historical and future messages.
+
+---
+
+## Attack Vector 4: Active Device Injection (MitM)
+* **Attacker Profile**: Adversary who successfully compromises an account password or modifies the homeserver database to register a new rogue device.
+* **Goal**: Trick the clients into sharing room keys with the rogue device to intercept group chats.
+
+### Attack Steps
+1. The attacker registers a malicious device under the `@alice:cipherlink.local` username.
+2. The attacker waits for `testuser` to send a message to the E2EE room.
+
+### Attack Results
+* **Analysis**: When `testuser` client builds the room membership list, it queries the homeserver for all devices belonging to the participants. It notices a new device.
+* **SAS Verification Barrier**: Our client checks the verification status of all device keys. Since the attacker's device cannot complete the interactive SAS verification (which requires out-of-band emoji confirmation), the device remains flagged as `Verified: false`.
+* **Status**: **FAILED**. If the sending client is configured to restrict room keys to verified devices (standard strict E2EE), the attacker is blocked from receiving room keys.
