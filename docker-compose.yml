@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: matrix-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: synapse
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: matrix-synapse
+    restart: unless-stopped
+    environment:
+      - SYNAPSE_ALLOW_PUBLIC_ROOMS_WITHOUT_AUTH=true
+      - SYNAPSE_CORS_ANYWHERE=true
+    depends_on:
+      - postgres
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./synapse:/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: matrix-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:
