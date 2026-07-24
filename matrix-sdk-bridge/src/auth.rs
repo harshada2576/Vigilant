@@ -121,6 +121,9 @@ impl MatrixBridge {
 
     #[wasm_bindgen]
     pub async fn logout(&self) -> Result<String, JsValue> {
+        self.sync_running.set(false);
+        self.initial_sync_complete.set(false);
+
         self.client
             .matrix_auth()
             .logout()

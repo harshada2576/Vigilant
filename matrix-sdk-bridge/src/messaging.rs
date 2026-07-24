@@ -1,21 +1,21 @@
 use crate::MatrixBridge;
-use crate::types::JsMessage;
+use crate::types::{
+    JsMessage,
+    extract_message_content,
+};
 
-use matrix_sdk::ruma::events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent};
-
-use matrix_sdk::ruma::events::room::message::{MessageType, RoomMessageEventContent};
-
-use matrix_sdk::ruma::RoomId;
-
-use matrix_sdk::config::SyncSettings;
+use matrix_sdk::{
+    ruma::{
+        RoomId,
+        events::{
+            AnySyncMessageLikeEvent, 
+            AnySyncTimelineEvent,
+            room::message::RoomMessageEventContent,
+        },
+    },
+};
 
 use wasm_bindgen::prelude::*;
-
-use wasm_bindgen_futures::spawn_local;
-
-use web_sys::console;
-
-use serde_json;
 
 #[wasm_bindgen]
 impl MatrixBridge {
@@ -53,44 +53,31 @@ impl MatrixBridge {
                     message_event,
                 )) = event
                     && let Some(original_event) = message_event.as_original()
-                    && let MessageType::Text(text_content) = &original_event.content.msgtype
                 {
+                    let Some(content) = 
+                        extract_message_content(&original_event.content.msgtype)
+                    else { 
+                        return; 
+                    };
+
                     let payload = JsMessage {
                         room_id: room.room_id().to_string(),
-
                         sender: original_event.sender.to_string(),
-
-                        body: text_content.body.clone(),
-
+                        body: content.body,
                         timestamp: original_event.origin_server_ts.get().into(),
+                        message_type: content.message_type,
+                        message_uri: content.message_uri,
+                        mime_type: content.mime_type,
+                        media_source: content.media_source,
                     };
 
                     if let Ok(json) = serde_json::to_string(&payload) {
                         let this = JsValue::null();
-
                         let argument = JsValue::from_str(&json);
-
                         let _ = callback.call1(&this, &argument);
                     }
                 }
             },
         );
-    }
-
-    // -------------------------
-    // Start sync
-    // -------------------------
-
-    #[wasm_bindgen]
-    pub fn start_sync(&self) {
-        let client = self.client.clone();
-
-        spawn_local(async move {
-            let settings = SyncSettings::default();
-
-            if let Err(error) = client.sync(settings).await {
-                console::error_1(&JsValue::from_str(&error.to_string()));
-            }
-        });
     }
 }
