@@ -67,9 +67,5 @@ impl MatrixBridge{
                 }
             },
         );
-
-        if !initial_sync_complete.get() {
-           return;
-        }
     }
 }
