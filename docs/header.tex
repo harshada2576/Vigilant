@@ -1,0 +1,160 @@
+\usepackage{fontspec}
+\usepackage{titling}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{etoolbox}
+
+% -------------------------------------------------
+% Fonts
+% -------------------------------------------------
+
+\setmonofont{DejaVu Sans Mono}
+
+% -------------------------------------------------
+% Title page
+% -------------------------------------------------
+
+\pretitle{
+    \begin{center}
+    \vspace*{3cm}
+    \Huge\bfseries
+}
+
+\posttitle{
+    \par
+    \vspace{0.8cm}
+    \end{center}
+}
+
+\preauthor{
+    \begin{center}
+    \Large
+}
+
+\postauthor{
+    \par
+    \vspace{0.5cm}
+    \end{center}
+}
+
+\predate{
+    \begin{center}
+    \large
+}
+
+\postdate{
+    \par
+    \end{center}
+}
+
+\setlength{\droptitle}{0cm}
+
+% Force title onto its own page
+\let\oldmaketitle\maketitle
+\renewcommand{\maketitle}{
+    \begin{titlepage}
+        \oldmaketitle
+        \vfill
+        \begin{center}
+            \large
+            API Reference and Frontend Integration Guide
+        \end{center}
+    \end{titlepage}
+}
+
+% -------------------------------------------------
+% Table of contents
+% -------------------------------------------------
+
+\setcounter{tocdepth}{3}
+
+% Give TOC its own page
+\pretocmd{\tableofcontents}{\clearpage}{}{}
+\apptocmd{\tableofcontents}{\clearpage}{}{}
+
+% -------------------------------------------------
+% Major section page breaks
+% -------------------------------------------------
+
+% Every H1 / Markdown # heading starts on a new page
+\pretocmd{\section}{\clearpage}{}{}
+
+% Prevent the very first section from creating
+% an unnecessary blank page after the TOC
+\let\oldsection\section
+\newif\iffirstsection
+\firstsectiontrue
+
+\renewcommand{\section}{
+    \iffirstsection
+        \global\firstsectionfalse
+    \else
+        \clearpage
+    \fi
+    \oldsection
+}
+
+% -------------------------------------------------
+% Heading spacing
+% -------------------------------------------------
+
+\titlespacing*{\section}
+    {0pt}
+    {0pt}
+    {1.5em}
+
+\titlespacing*{\subsection}
+    {0pt}
+    {2em}
+    {0.8em}
+
+\titlespacing*{\subsubsection}
+    {0pt}
+    {1.5em}
+    {0.5em}
+
+% -------------------------------------------------
+% Headers / footers
+% -------------------------------------------------
+
+\pagestyle{fancy}
+\fancyhf{}
+
+\fancyhead[L]{Vigilant Matrix SDK Bridge}
+\fancyhead[R]{Backend Cycle 1 · v0.1}
+
+\fancyfoot[C]{\thepage}
+
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Ensure chapter-opening/section pages keep footer
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyhead[L]{Vigilant Matrix SDK Bridge}
+    \fancyhead[R]{Backend Cycle 1 · v0.1}
+    \fancyfoot[C]{\thepage}
+    \renewcommand{\headrulewidth}{0.4pt}
+}
+
+% -------------------------------------------------
+% General layout
+% -------------------------------------------------
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+
+% Avoid headings stranded at bottom of pages
+\usepackage{needspace}
+
+\let\oldsubsection\subsection
+\renewcommand{\subsection}{
+    \Needspace{5\baselineskip}
+    \oldsubsection
+}
+
+\let\oldsubsubsection\subsubsection
+\renewcommand{\subsubsection}{
+    \Needspace{4\baselineskip}
+    \oldsubsubsection
+}

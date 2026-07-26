@@ -1,20 +1,16 @@
 ---
-
 title: "Vigilant Matrix SDK Bridge"
 subtitle: "WebAssembly API Reference and Frontend Integration Guide"
-version: "Backend Cycle 1 · v0.1"
+author: "Vigilant Engineering"
 date: "July 2026"
+version: "Backend Cycle 1 · v0.1"
 lang: "en"
 toc: true
 toc-depth: 3
 numbersections: true
 geometry: "margin=1in"
-----------------------
-
-\newpage
-\thispagestyle{empty}
-\mbox{}
-\newpage
+titlepage: true
+---
 
 # Document Overview
 
