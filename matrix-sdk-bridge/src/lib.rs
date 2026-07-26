@@ -11,13 +11,17 @@ use async_lock::Mutex;
 use matrix_sdk::{
     Client,
     config::SyncSettings,
+    ruma::OwnedEventId,
 };
 use matrix_sdk_ui::timeline::Timeline;
 
 use std::{
     rc::Rc,
     cell::Cell,
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     sync::Arc,
 };
 
@@ -29,6 +33,7 @@ use web_sys::console;
 pub struct MatrixBridge {
     pub(crate) client: Client,
     pub(crate) timelines: Arc<Mutex<HashMap<String, Arc<Timeline>>>>,
+    pub(crate) exposed_history: Arc<Mutex<HashMap<String, HashSet<OwnedEventId>>>>,
     pub(crate) sync_running: Rc<Cell<bool>>,
     pub(crate) initial_sync_complete: Rc<Cell<bool>>,
 }
@@ -40,9 +45,7 @@ impl MatrixBridge {
     }
 
     #[wasm_bindgen]
-    pub async fn init() -> Result<MatrixBridge, JsValue> {
-        let homeserver_url = "http://localhost:8008";
-
+    pub async fn init(homeserver_url: &str) -> Result<MatrixBridge, JsValue> {
         let client = Client::builder()
             .homeserver_url(homeserver_url)
             .build()
@@ -52,6 +55,7 @@ impl MatrixBridge {
         Ok(MatrixBridge {
             client,
             timelines: Arc::new(Mutex::new(HashMap::new())),
+            exposed_history: Arc::new(Mutex::new(HashMap::new())),
             sync_running: Rc::new(Cell::new(false)),
             initial_sync_complete: Rc::new(Cell::new(false)),
         })

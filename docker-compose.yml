@@ -1,14 +1,13 @@
-version: "3.9"
-
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:17-alpine
     container_name: matrix-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: synapse
       POSTGRES_USER: synapse
       POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -16,9 +15,6 @@ services:
     image: matrixdotorg/synapse:latest
     container_name: matrix-synapse
     restart: unless-stopped
-    environment:
-      - SYNAPSE_ALLOW_PUBLIC_ROOMS_WITHOUT_AUTH=true
-      - SYNAPSE_CORS_ANYWHERE=true
     depends_on:
       - postgres
     ports:

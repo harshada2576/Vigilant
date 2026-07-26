@@ -1,9 +1,15 @@
 use crate::MatrixBridge;
-use crate::types::{SavedMeta, SavedSession, SavedTokens};
 
-use matrix_sdk::authentication::matrix::MatrixSession;
-use matrix_sdk::ruma::api::client::account::register::v3::Request as RegisterRequest;
-use matrix_sdk::store::RoomLoadSettings;
+use matrix_sdk::{
+    authentication::matrix::MatrixSession,
+    ruma::api::client::{
+        uiaa::{
+            AuthData,
+            Dummy,
+        },
+        account::register::v3::Request as RegisterRequest,
+    },
+};
 
 use wasm_bindgen::prelude::*;
 
@@ -32,25 +38,75 @@ impl MatrixBridge {
 
     // -------------------------
     // Register
+    // - m.login.dummy is the UIAA stage Synapse requires before allowing registration.
+    // - future -- email, captcha, registration token, terms 
     // -------------------------
 
     #[wasm_bindgen]
     pub async fn register(&self, username: &str, password: &str) -> Result<String, JsValue> {
+        // first registeration attemp : dont know weather homeserver requires uiaa
         let mut request = RegisterRequest::new();
 
         request.username = Some(username.to_string());
-
         request.password = Some(password.to_string());
-
         request.initial_device_display_name = Some("WASM Client".to_string());
 
-        self.client
-            .matrix_auth()
-            .register(request)
-            .await
-            .map_err(Self::js_error)?;
+        match self.client.matrix_auth().register(request).await {
+            // homeserver didnt req uiaa
+            Ok(_) => {
+                Ok(format!("Successfully registered user :: {}", username))
+            }
 
-        Ok(format!("Successfully registered user :: {}", username))
+            Err(error) => {
+                let Some(uiaa) = error.as_uiaa_response() else {
+                    return Err(Self::js_error(error));
+                };
+
+                // Only support for automatic dummy UIAA in Cycle 1.
+                let supports_dummy = uiaa.flows.iter().any(|flow| {
+                    flow.stages.iter().any(|stage| {
+                        stage.as_str() == "m.login.dummy"
+                    })
+                });
+
+                
+                if !supports_dummy {
+                    return Err(JsValue::from_str("Registration requires an unsupported UIAA flow"));
+                }
+
+                // synapse should give session to continue
+                let session = uiaa
+                    .session
+                    .clone()
+                    .ok_or_else(|| {
+                        JsValue::from_str("UIAA response did not contain a session")
+                    })?;
+                
+                // construct auth response for m.login.dummy
+                let mut dummy = Dummy::new();
+                dummy.session = Some(session);
+                let auth = AuthData::Dummy(dummy);
+
+                // new req as orignal was consumed
+                let mut request = RegisterRequest::new();
+
+                request.username = Some(username.to_string());
+                request.password = Some(password.to_string());
+                request.initial_device_display_name =
+                    Some("Vigilant WASM Client".to_string());
+
+                request.auth = Some(auth);
+
+                // retry -- now satisfied uiaa challange
+                self.client
+                    .matrix_auth()
+                    .register(request)
+                    .await
+                    .map_err(Self::js_error)?;
+
+                Ok(format!("Successfully registered user: {}", username))
+            }
+        }
     }
 
     // -------------------------
@@ -59,35 +115,12 @@ impl MatrixBridge {
 
     #[wasm_bindgen]
     pub fn export_session(&self) -> Result<Option<String>, JsValue> {
-        let user_id = match self.client.user_id() {
-            Some(id) => id.to_string(),
-
-            None => return Ok(None),
+        let Some(session) = self.client.matrix_auth().session() else {
+            return Ok(None);
         };
 
-        let device_id = match self.client.device_id() {
-            Some(id) => id.to_string(),
-
-            None => return Ok(None),
-        };
-
-        let access_token = match self.client.access_token() {
-            Some(token) => token,
-
-            None => return Ok(None),
-        };
-
-        let session = SavedSession {
-            meta: SavedMeta { user_id, device_id },
-
-            tokens: SavedTokens {
-                access_token,
-
-                refresh_token: None,
-            },
-        };
-
-        let json = serde_json::to_string(&session).map_err(Self::js_error)?;
+        let json = serde_json::to_string(&session)
+            .map_err(Self::js_error)?;
 
         Ok(Some(json))
     }
@@ -98,16 +131,16 @@ impl MatrixBridge {
 
     #[wasm_bindgen]
     pub async fn restore_session(&self, session_json: &str) -> Result<String, JsValue> {
-        let session: MatrixSession = serde_json::from_str(session_json).map_err(Self::js_error)?;
+        let session: MatrixSession = serde_json::from_str(session_json)
+            .map_err(Self::js_error)?;
 
         self.client
             .matrix_auth()
-            .restore_session(session, RoomLoadSettings::default())
+            .restore_session(session, Default::default())
             .await
             .map_err(Self::js_error)?;
 
-        let user_id = self
-            .client
+        let user_id = self.client
             .user_id()
             .map(|id| id.to_string())
             .unwrap_or_default();

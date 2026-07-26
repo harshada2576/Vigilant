@@ -1,13 +1,13 @@
 use crate::MatrixBridge;
 use crate::types::JsRoom;
 
-use matrix_sdk::ruma::{RoomId, RoomOrAliasId};
-
-use matrix_sdk::ruma::api::client::room::create_room::v3::Request as CreateRoomRequest;
-
+use matrix_sdk::ruma::{
+    UserId,
+    RoomId, 
+    RoomOrAliasId,
+    api::client::room::create_room::v3::Request as CreateRoomRequest,
+};
 use wasm_bindgen::prelude::*;
-
-use serde_json;
 
 #[wasm_bindgen]
 impl MatrixBridge {
@@ -70,6 +70,28 @@ impl MatrixBridge {
         }
 
         serde_json::to_string(&result).map_err(Self::js_error)
+    }
+
+    //
+    // invite someone else
+    //
+    #[wasm_bindgen]
+    pub async fn invite_user(&self, room_id_str: &str, user_id_str: &str) -> Result<String, JsValue> {
+        let room_id = <&RoomId>::try_from(room_id_str)
+            .map_err(Self::js_error)?;
+
+        let user_id = <&UserId>::try_from(user_id_str)
+            .map_err(Self::js_error)?;
+
+        let room = self.client
+            .get_room(room_id)
+            .ok_or_else(|| JsValue::from_str("Room not found"))?;
+            
+        room.invite_user_by_id(user_id)
+            .await
+            .map_err(Self::js_error)?;
+
+        Ok(format!("Invited {} to {}", user_id_str, room_id_str))
     }
 
     // -------------------------

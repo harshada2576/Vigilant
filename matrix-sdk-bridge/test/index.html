@@ -1,0 +1,1190 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vigilant Matrix Bridge Test</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            margin-top: 0;
+            opacity: 0.65;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 16px;
+        }
+
+        section {
+            background: white;
+            padding: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        section h2 {
+            margin-top: 0;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 4px 0;
+            font-family: inherit;
+        }
+
+        button {
+            padding: 8px 12px;
+            margin: 4px 2px;
+            cursor: pointer;
+        }
+
+        #output {
+            background: #111;
+            color: #eee;
+            padding: 16px;
+            min-height: 300px;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .wide {
+            grid-column: 1 / -1;
+        }
+
+        .status {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Vigilant Matrix Bridge</h1>
+<p class="subtitle">Cycle 1 integration test harness</p>
+
+<div class="grid">
+
+    <!-- AUTHENTICATION -->
+
+    <section>
+        <h2>Authentication</h2>
+
+        <input
+            id="username"
+            value="alice"
+            placeholder="Username"
+        >
+
+        <input
+            id="password"
+            type="password"
+            placeholder="Password"
+        >
+
+        <button id="register">Register</button>
+        <button id="login">Login</button>
+        <button id="logout">Logout</button>
+    </section>
+
+
+    <!-- SESSION -->
+
+    <section>
+        <h2>Session</h2>
+
+        <button id="export-session">
+            Export + Save
+        </button>
+
+        <button id="restore-session">
+            Restore
+        </button>
+
+        <button id="clear-session">
+            Clear Saved Session
+        </button>
+    </section>
+
+
+    <!-- SYNC -->
+
+    <section>
+        <h2>Sync / Events</h2>
+
+        <p class="status">
+            Status:
+            <span id="sync-status">stopped</span>
+        </p>
+
+        <button id="start-sync">
+            Start Sync + Listeners
+        </button>
+
+        <button id="stop-sync">
+            Stop Sync
+        </button>
+    </section>
+
+
+    <!-- ROOMS -->
+
+    <section>
+        <h2>Rooms</h2>
+
+        <input
+            id="room-name"
+            value="Vigilant Test"
+            placeholder="Room name"
+        >
+
+        <input
+            id="room-id"
+            placeholder="!room:matrix.seucra.tech"
+        >
+
+        <button id="create-room">Create</button>
+        <button id="join-room">Join</button>
+        <button id="leave-room">Leave</button>
+        <button id="list-rooms">List Rooms</button>
+    </section>
+
+
+    <!-- INVITES -->
+
+    <section>
+        <h2>Invite</h2>
+
+        <input
+            id="invite-user"
+            value="@bob:matrix.seucra.tech"
+            placeholder="@user:matrix.seucra.tech"
+        >
+
+        <button id="invite-user-button">
+            Invite User
+        </button>
+    </section>
+
+
+    <!-- MESSAGING -->
+
+    <section>
+        <h2>Messaging</h2>
+
+        <input
+            id="message"
+            placeholder="Message"
+        >
+
+        <button id="send-message">
+            Send Message
+        </button>
+    </section>
+
+
+    <!-- HISTORY -->
+
+    <section>
+        <h2>History</h2>
+
+        <input
+            id="history-limit"
+            type="number"
+            value="20"
+            min="1"
+            max="100"
+            placeholder="Limit"
+        >
+
+        <button id="get-history">
+            Get History
+        </button>
+
+        <button id="load-more-history">
+            Load More
+        </button>
+    </section>
+
+
+    <!-- DIRECT MESSAGES -->
+
+    <section>
+        <h2>Direct Messages</h2>
+
+        <input
+            id="dm-user"
+            value="@bob:matrix.seucra.tech"
+            placeholder="@user:matrix.seucra.tech"
+        >
+
+        <button id="create-dm">Create DM</button>
+        <button id="find-dm">Find DM</button>
+        <button id="get-create-dm">Get / Create DM</button>
+        <button id="list-dms">List DMs</button>
+    </section>
+
+
+    <!-- IMAGE -->
+
+    <section>
+        <h2>Image</h2>
+
+        <input
+            id="image-file"
+            type="file"
+            accept="image/*"
+        >
+
+        <button id="send-image">
+            Send Image
+        </button>
+    </section>
+
+
+    <!-- PDF -->
+
+    <section>
+        <h2>PDF File</h2>
+
+        <input
+            id="pdf-file"
+            type="file"
+            accept="application/pdf"
+        >
+
+        <button id="send-file">
+            Send PDF
+        </button>
+    </section>
+
+
+    <!-- MEDIA DOWNLOAD -->
+
+    <section>
+        <h2>Media Download</h2>
+
+        <input
+            id="media-source"
+            placeholder='Paste media_source JSON'
+        >
+
+        <button id="get-media">
+            Download Media
+        </button>
+    </section>
+
+
+    <!-- OUTPUT -->
+
+    <section class="wide">
+        <h2>Output</h2>
+
+        <button id="clear-output">
+            Clear
+        </button>
+
+        <pre id="output"></pre>
+    </section>
+
+</div>
+
+
+<script type="module">
+
+import init, { MatrixBridge }
+    from "../pkg/matrix_sdk_bridge.js";
+
+
+let bridge;
+let syncStarted = false;
+let listenersRegistered = false;
+
+const output =
+    document.getElementById("output");
+
+
+// ==================================================
+// Helpers
+// ==================================================
+
+function log(message) {
+    const text =
+        typeof message === "string"
+            ? message
+            : JSON.stringify(message, null, 2);
+
+    output.textContent += `${text}\n`;
+    output.scrollTop = output.scrollHeight;
+
+    console.log(message);
+}
+
+
+function logError(prefix, error) {
+    console.error(prefix, error);
+    log(`${prefix}: ${error}`);
+}
+
+
+function value(id) {
+    return document
+        .getElementById(id)
+        .value
+        .trim();
+}
+
+
+function roomId() {
+    return value("room-id");
+}
+
+
+function requireRoom() {
+    const id = roomId();
+
+    if (!id) {
+        throw new Error("Room ID is required");
+    }
+
+    return id;
+}
+
+
+function setRoom(id) {
+    if (id) {
+        document.getElementById("room-id").value = id;
+    }
+}
+
+
+function historyLimit() {
+    const limit =
+        Number(
+            document.getElementById("history-limit").value
+        );
+
+    if (!Number.isInteger(limit) || limit <= 0) {
+        throw new Error("History limit must be positive");
+    }
+
+    return limit;
+}
+
+
+function prettyJsonString(json) {
+    try {
+        return JSON.stringify(
+            JSON.parse(json),
+            null,
+            2
+        );
+    } catch {
+        return json;
+    }
+}
+
+
+function updateSyncStatus() {
+    document.getElementById("sync-status").textContent =
+        syncStarted ? "running" : "stopped";
+}
+
+
+// ==================================================
+// Initialize
+// ==================================================
+
+async function main() {
+
+    await init();
+
+    log("WASM initialized");
+
+    bridge = await MatrixBridge.init("http://localhost:8008");
+
+    log("MatrixBridge initialized");
+
+    updateSyncStatus();
+
+
+    // ==================================================
+    // Authentication
+    // ==================================================
+
+    document.getElementById("register").onclick =
+        async () => {
+            try {
+                const result =
+                    await bridge.register(
+                        value("username"),
+                        value("password")
+                    );
+
+                log(result);
+
+            } catch (error) {
+                logError("REGISTER ERROR", error);
+            }
+        };
+
+
+    document.getElementById("login").onclick =
+        async () => {
+            try {
+                const result =
+                    await bridge.login(
+                        value("username"),
+                        value("password")
+                    );
+
+                log(result);
+
+            } catch (error) {
+                logError("LOGIN ERROR", error);
+            }
+        };
+
+
+    document.getElementById("logout").onclick =
+        async () => {
+            try {
+                if (syncStarted) {
+                    bridge.stop_sync();
+                    syncStarted = false;
+                    updateSyncStatus();
+                }
+
+                const result =
+                    await bridge.logout();
+
+                localStorage.removeItem(
+                    "vigilant_session"
+                );
+
+                log(result);
+                log("Saved session removed");
+
+            } catch (error) {
+                logError("LOGOUT ERROR", error);
+            }
+        };
+
+
+    // ==================================================
+    // Session
+    // ==================================================
+
+    document.getElementById("export-session").onclick =
+        () => {
+            try {
+                const session =
+                    bridge.export_session();
+
+                if (!session) {
+                    log("No active session");
+                    return;
+                }
+
+                localStorage.setItem(
+                    "vigilant_session",
+                    session
+                );
+
+                log("Session exported and saved");
+
+            } catch (error) {
+                logError("EXPORT ERROR", error);
+            }
+        };
+
+
+    document.getElementById("restore-session").onclick =
+        async () => {
+            try {
+                const session =
+                    localStorage.getItem(
+                        "vigilant_session"
+                    );
+
+                if (!session) {
+                    log("No saved session");
+                    return;
+                }
+
+                /*
+                 * New bridge deliberately.
+                 *
+                 * This verifies that restore_session()
+                 * actually restores authentication.
+                 */
+                if (syncStarted) {
+                    bridge.stop_sync();
+                    syncStarted = false;
+                }
+
+                bridge =
+                    await MatrixBridge.init();
+
+                listenersRegistered = false;
+
+                log("Fresh MatrixBridge created");
+
+                const result =
+                    await bridge.restore_session(session);
+
+                log(result);
+
+                updateSyncStatus();
+
+            } catch (error) {
+                logError("RESTORE ERROR", error);
+            }
+        };
+
+
+    document.getElementById("clear-session").onclick =
+        () => {
+            localStorage.removeItem(
+                "vigilant_session"
+            );
+
+            log("Saved session cleared");
+        };
+
+
+    // ==================================================
+    // Event listeners
+    // ==================================================
+
+    function registerListeners() {
+
+        if (listenersRegistered) {
+            return;
+        }
+
+
+        bridge.on_message((json) => {
+            try {
+                const message =
+                    JSON.parse(json);
+
+                log(
+                    `[MESSAGE] ${message.sender}: ${message.body}`
+                );
+
+                console.log(
+                    "Message payload:",
+                    message
+                );
+
+                /*
+                 * Convenience:
+                 *
+                 * media_source is required by get_media().
+                 * Automatically put the newest media source
+                 * into the media download field.
+                 */
+                if (message.media_source) {
+                    document.getElementById(
+                        "media-source"
+                    ).value =
+                        message.media_source;
+                }
+
+            } catch (error) {
+                logError(
+                    "MESSAGE CALLBACK ERROR",
+                    error
+                );
+            }
+        });
+
+
+        bridge.on_notification((json) => {
+            try {
+                const notification =
+                    JSON.parse(json);
+
+                log(
+                    `[NOTIFICATION] ${notification.event_type}`
+                    + ` | ${notification.room_id}`
+                    + ` | ${notification.sender}`
+                    + ` | ${notification.body}`
+                );
+
+                console.log(
+                    "Notification payload:",
+                    notification
+                );
+
+            } catch (error) {
+                logError(
+                    "NOTIFICATION CALLBACK ERROR",
+                    error
+                );
+            }
+        });
+
+
+        listenersRegistered = true;
+
+        log("Message listener registered");
+        log("Notification listener registered");
+    }
+
+
+    // ==================================================
+    // Sync
+    // ==================================================
+
+    document.getElementById("start-sync").onclick =
+        () => {
+            try {
+                if (syncStarted) {
+                    log("Sync already running");
+                    return;
+                }
+
+                registerListeners();
+
+                bridge.start_sync();
+
+                syncStarted = true;
+
+                updateSyncStatus();
+
+                log("Matrix sync started");
+
+            } catch (error) {
+                logError("SYNC ERROR", error);
+            }
+        };
+
+
+    document.getElementById("stop-sync").onclick =
+        () => {
+            try {
+                if (!syncStarted) {
+                    log("Sync is not running");
+                    return;
+                }
+
+                bridge.stop_sync();
+
+                syncStarted = false;
+
+                updateSyncStatus();
+
+                log("Matrix sync stopped");
+
+            } catch (error) {
+                logError("STOP SYNC ERROR", error);
+            }
+        };
+
+
+    // ==================================================
+    // Rooms
+    // ==================================================
+
+    document.getElementById("create-room").onclick =
+        async () => {
+            try {
+                const id =
+                    await bridge.create_room(
+                        value("room-name")
+                    );
+
+                setRoom(id);
+
+                log(`Room created: ${id}`);
+
+            } catch (error) {
+                logError(
+                    "CREATE ROOM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document.getElementById("join-room").onclick =
+        async () => {
+            try {
+                const result =
+                    await bridge.join_room(
+                        requireRoom()
+                    );
+
+                log(result);
+
+            } catch (error) {
+                logError(
+                    "JOIN ROOM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document.getElementById("leave-room").onclick =
+        async () => {
+            try {
+                const result =
+                    await bridge.leave_room(
+                        requireRoom()
+                    );
+
+                log(result);
+
+            } catch (error) {
+                logError(
+                    "LEAVE ROOM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document.getElementById("list-rooms").onclick =
+        async () => {
+            try {
+                const json =
+                    await bridge.list_joined_rooms();
+
+                const rooms =
+                    JSON.parse(json);
+
+                if (!rooms.length) {
+                    log("Joined rooms: []");
+                    return;
+                }
+
+                log(
+                    `Joined rooms (${rooms.length}):`
+                );
+
+                for (const room of rooms) {
+                    log(
+                        `  ${room.name} | ${room.room_id}`
+                    );
+                }
+
+            } catch (error) {
+                logError(
+                    "LIST ROOMS ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // Invite
+    // ==================================================
+
+    document
+        .getElementById("invite-user-button")
+        .onclick =
+        async () => {
+            try {
+                const result =
+                    await bridge.invite_user(
+                        requireRoom(),
+                        value("invite-user")
+                    );
+
+                log(result);
+
+            } catch (error) {
+                logError(
+                    "INVITE ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // Messaging
+    // ==================================================
+
+    document.getElementById("send-message").onclick =
+        async () => {
+            try {
+                const message =
+                    value("message");
+
+                if (!message) {
+                    throw new Error(
+                        "Message cannot be empty"
+                    );
+                }
+
+                const result =
+                    await bridge.send_message(
+                        requireRoom(),
+                        message
+                    );
+
+                log(
+                    `Message sent: ${result}`
+                );
+
+            } catch (error) {
+                logError(
+                    "SEND MESSAGE ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // History
+    // ==================================================
+
+    document.getElementById("get-history").onclick =
+        async () => {
+            try {
+                const json =
+                    await bridge.get_room_history(
+                        requireRoom(),
+                        historyLimit()
+                    );
+
+                log("ROOM HISTORY:");
+                log(prettyJsonString(json));
+
+            } catch (error) {
+                logError(
+                    "HISTORY ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document
+        .getElementById("load-more-history")
+        .onclick =
+        async () => {
+            try {
+                const json =
+                    await bridge.load_more_history(
+                        requireRoom(),
+                        historyLimit()
+                    );
+
+                log("OLDER HISTORY:");
+                log(prettyJsonString(json));
+
+            } catch (error) {
+                logError(
+                    "LOAD MORE ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // Direct messages
+    // ==================================================
+
+    document.getElementById("create-dm").onclick =
+        async () => {
+            try {
+                const id =
+                    await bridge.create_direct_message(
+                        value("dm-user")
+                    );
+
+                setRoom(id);
+
+                log(`DM created: ${id}`);
+
+            } catch (error) {
+                logError(
+                    "CREATE DM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document.getElementById("find-dm").onclick =
+        async () => {
+            try {
+                const id =
+                    await bridge.find_direct_message(
+                        value("dm-user")
+                    );
+
+                if (id) {
+                    setRoom(id);
+                    log(`DM found: ${id}`);
+                } else {
+                    log("No DM found");
+                }
+
+            } catch (error) {
+                logError(
+                    "FIND DM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document.getElementById("get-create-dm").onclick =
+        async () => {
+            try {
+                const id =
+                    await bridge
+                        .get_or_create_direct_message(
+                            value("dm-user")
+                        );
+
+                setRoom(id);
+
+                log(`DM room: ${id}`);
+
+            } catch (error) {
+                logError(
+                    "GET/CREATE DM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    document.getElementById("list-dms").onclick =
+        async () => {
+            try {
+                const json =
+                    await bridge.list_direct_messages();
+
+                log("DIRECT MESSAGES:");
+                log(prettyJsonString(json));
+
+            } catch (error) {
+                logError(
+                    "LIST DM ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // Image
+    // ==================================================
+
+    document.getElementById("send-image").onclick =
+        async () => {
+            try {
+                const input =
+                    document.getElementById(
+                        "image-file"
+                    );
+
+                const file =
+                    input.files[0];
+
+                if (!file) {
+                    throw new Error(
+                        "Select an image first"
+                    );
+                }
+
+                const bytes =
+                    new Uint8Array(
+                        await file.arrayBuffer()
+                    );
+
+                const eventId =
+                    await bridge.send_image(
+                        requireRoom(),
+                        bytes,
+                        file.name,
+                        file.type
+                    );
+
+                log(
+                    `Image sent: ${eventId}`
+                );
+
+            } catch (error) {
+                logError(
+                    "SEND IMAGE ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // PDF
+    // ==================================================
+
+    document.getElementById("send-file").onclick =
+        async () => {
+            try {
+                const input =
+                    document.getElementById(
+                        "pdf-file"
+                    );
+
+                const file =
+                    input.files[0];
+
+                if (!file) {
+                    throw new Error(
+                        "Select a PDF first"
+                    );
+                }
+
+                if (
+                    file.type !==
+                    "application/pdf"
+                ) {
+                    throw new Error(
+                        "Only PDF is supported"
+                    );
+                }
+
+                const bytes =
+                    new Uint8Array(
+                        await file.arrayBuffer()
+                    );
+
+                const eventId =
+                    await bridge.send_file(
+                        requireRoom(),
+                        bytes,
+                        file.name,
+                        file.type
+                    );
+
+                log(
+                    `File sent: ${eventId}`
+                );
+
+            } catch (error) {
+                logError(
+                    "SEND FILE ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // Media download
+    // ==================================================
+
+    document.getElementById("get-media").onclick =
+        async () => {
+            try {
+                const source =
+                    value("media-source");
+
+                if (!source) {
+                    throw new Error(
+                        "media_source JSON is required"
+                    );
+                }
+
+                const bytes =
+                    await bridge.get_media(source);
+
+                log(
+                    `Media downloaded: ${bytes.length} bytes`
+                );
+
+                /*
+                 * We don't know MIME type from get_media()
+                 * itself, so application/octet-stream is
+                 * appropriate for this test harness.
+                 */
+                const blob =
+                    new Blob(
+                        [bytes],
+                        {
+                            type:
+                                "application/octet-stream"
+                        }
+                    );
+
+                const url =
+                    URL.createObjectURL(blob);
+
+                const anchor =
+                    document.createElement("a");
+
+                anchor.href = url;
+                anchor.download =
+                    "vigilant-media-download";
+
+                anchor.click();
+
+                URL.revokeObjectURL(url);
+
+            } catch (error) {
+                logError(
+                    "GET MEDIA ERROR",
+                    error
+                );
+            }
+        };
+
+
+    // ==================================================
+    // Output
+    // ==================================================
+
+    document.getElementById("clear-output").onclick =
+        () => {
+            output.textContent = "";
+        };
+
+
+    log("All test handlers registered");
+}
+
+
+// ==================================================
+// Fatal initialization
+// ==================================================
+
+main().catch(error => {
+    console.error(error);
+    log(`INITIALIZATION ERROR: ${error}`);
+});
+
+</script>
+
+</body>
+</html>

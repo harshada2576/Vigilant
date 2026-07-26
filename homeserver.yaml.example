@@ -1,0 +1,46 @@
+# Configuration file for Synapse.
+#
+# This is a YAML file: see [1] for a quick introduction. Note in particular
+# that *indentation is important*: all the elements of a list or dictionary
+# should have the same indentation.
+#
+# [1] https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html
+#
+# For more information on how to configure Synapse, including a complete accounting of
+# each option, go to docs/usage/configuration/config_documentation.md or
+# https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html
+server_name: "matrix.seucra.tech"
+pid_file: /data/homeserver.pid
+listeners:
+  - port: 8008
+    resources:
+    - compress: false
+      names:
+      - client
+      - federation
+    tls: false
+    type: http
+    x_forwarded: true
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: password
+    dbname: synapse
+    host: postgres
+    port: 5432
+    cp_min: 5
+    cp_max: 10
+log_config: "/data/matrix.seucra.tech.log.config"
+media_store_path: /data/media_store
+registration_shared_secret: "Xdc;.afjtGdmLkdbWXjQlvca#~ahbz.mQ4hSb0Ay20^eg.0hCj"
+report_stats: false
+macaroon_secret_key: "9g^Gr~9,DcxsNy:zeLfROY1T5mNQ2s4^+#IGeG0tB,.^##z7BV"
+form_secret: "I@MQ728K0:fBFu*xo3nEet;l*lbbR.hhU6+*pwPIUK*EFF_q4K"
+signing_key_path: "/data/matrix.seucra.tech.signing.key"
+trusted_key_servers:
+  - server_name: "matrix.org"
+enable_registration: true
+enable_registration_without_verification: true
+
+# vim:ft=yaml

@@ -1,28 +1,6 @@
 use serde::Serialize;
 
 //
-// Session export structures
-//
-
-#[derive(Serialize)]
-pub struct SavedMeta {
-    pub user_id: String,
-    pub device_id: String,
-}
-
-#[derive(Serialize)]
-pub struct SavedTokens {
-    pub access_token: String,
-    pub refresh_token: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SavedSession {
-    pub meta: SavedMeta,
-    pub tokens: SavedTokens,
-}
-
-//
 // Message payload sent to JavaScript
 //
 
