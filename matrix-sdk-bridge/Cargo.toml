@@ -2,6 +2,8 @@
 name = "matrix-sdk-bridge"
 version = "0.1.0"
 edition = "2024"
+description = "WebAssembly Matrix SDK bridge for Vigilant"
+license = "MIT"
 
 # To compile this as a dynamic WebAssembly library
 [lib]
