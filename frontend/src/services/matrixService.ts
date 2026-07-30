@@ -498,6 +498,19 @@ class MatrixService {
     return registeredUser;
   }
 
+  destroy() {
+    this.isInitialised = false;
+    getBridgeInstance().then((bridge) => {
+      if (bridge) {
+        try {
+          bridge.stop_sync();
+        } catch (e) {
+          console.warn("WASM bridge stop sync error:", e);
+        }
+      }
+    });
+  }
+
   async logout() {
     const store = useMatrixStore.getState();
     try {
