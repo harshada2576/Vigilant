@@ -15,17 +15,6 @@ Vigilant is a high-performance, private corporate messaging application built on
 
 ---
 
-## 🔒 Security & WASM Hosting Safety
-
-### Is `/public/matrix_sdk_bridge_bg.wasm` safe to host publicly?
-**Yes, 100% safe.** 
-
-- `.wasm` (WebAssembly) files are compiled client-side bytecodes (equivalent to minified JavaScript bundles). They allow the user's web browser to execute high-performance Rust cryptographic logic (Megolm key encapsulation, E2EE state machine) directly inside the browser.
-- **Zero Secrets**: The WASM file contains no private keys, passwords, or server credentials. All authentication tokens and encryption keys are generated dynamically at runtime and kept securely inside local browser memory/storage.
-- **Industry Standard**: Serving compiled WebAssembly binaries from the `/public` folder is the standard deployment pattern used by Figma, Zoom Web, WhatsApp Web, Element Matrix, and 1Password.
-
----
-
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
@@ -99,5 +88,3 @@ Vigilant/
 
 ---
 
-## 🛡️ License
-Confidential & Proprietary — Sovereign Enterprise Security Platform.
