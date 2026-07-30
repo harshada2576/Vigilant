@@ -106,8 +106,9 @@ export function ChatBubble({
               </div>
               <a
                 href={fileUrl || "#"}
-                download
+                download={fileName || "document.pdf"}
                 className="p-1.5 hover:bg-muted/50 rounded-md text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                title={`Download ${fileName || "document.pdf"}`}
               >
                 <Download className="size-4.5" />
               </a>

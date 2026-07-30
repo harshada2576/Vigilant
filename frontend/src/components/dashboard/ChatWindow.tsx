@@ -8,7 +8,9 @@ import {
   Hash, 
   Users,
   ShieldCheck,
-  Loader2
+  Loader2,
+  X,
+  FileText
 } from "lucide-react";
 import { useMatrixStore } from "@/store/matrixStore";
 import { matrixService } from "@/services/matrixService";
@@ -29,7 +31,12 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
   // States
   const [text, setText] = React.useState("");
   const [isUploading, setIsUploading] = React.useState(false);
-  const [uploadedFileName, setUploadedFileName] = React.useState("");
+  const [pendingFile, setPendingFile] = React.useState<{
+    file: File;
+    name: string;
+    isImage: boolean;
+    fileUrl: string;
+  } | null>(null);
   
   // Refs
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -46,52 +53,76 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
 
   React.useEffect(() => {
     scrollToBottom();
-  }, [messages, isUploading]);
+  }, [messages, isUploading, pendingFile]);
+
+  // Sync messages periodically or on storage event
+  React.useEffect(() => {
+    const handleSync = () => {
+      if (roomId) {
+        matrixService.syncRoomMessages(roomId);
+      }
+    };
+
+    window.addEventListener("storage", handleSync);
+    window.addEventListener("vigilant_message_sent", handleSync);
+
+    const interval = setInterval(handleSync, 1000);
+    return () => {
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener("vigilant_message_sent", handleSync);
+      clearInterval(interval);
+    };
+  }, [roomId]);
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!text.trim() || !room) return;
+    if ((!text.trim() && !pendingFile) || !room) return;
 
-    matrixService.sendMessage(room.id, text, "text");
-    setText("");
+    if (pendingFile) {
+      matrixService.sendMessage(
+        room.id,
+        text.trim() || (pendingFile.isImage ? "" : `Attachment: ${pendingFile.name}`),
+        pendingFile.isImage ? "image" : "file",
+        pendingFile.name,
+        pendingFile.fileUrl
+      );
+      setPendingFile(null);
+      setText("");
+    } else {
+      matrixService.sendMessage(room.id, text.trim(), "text");
+      setText("");
+    }
   };
 
   const handleAttachClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !room) return;
 
     const isImage = file.type.startsWith("image/");
-    const isPdf = file.type === "application/pdf";
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
     if (!isImage && !isPdf) {
-      alert("Only Images and PDF files are allowed in the MVP stack.");
+      alert("Only Images and PDF files are allowed.");
       return;
     }
 
-    setIsUploading(true);
-    setUploadedFileName(file.name);
-
-    setTimeout(() => {
-      const fileUrl = isImage 
-        ? URL.createObjectURL(file) 
-        : "/mock-files/document.pdf";
-      
-      matrixService.sendMessage(
-        room.id, 
-        isImage ? "" : `Uploaded attachment: ${file.name}`,
-        isImage ? "image" : "file",
-        file.name,
+    const reader = new FileReader();
+    reader.onload = () => {
+      const fileUrl = reader.result as string;
+      setPendingFile({
+        file,
+        name: file.name,
+        isImage,
         fileUrl
-      );
-      
-      setIsUploading(false);
-      setUploadedFileName("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }, 1200);
+      });
+    };
+    reader.readAsDataURL(file);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   if (!room) {
@@ -179,27 +210,38 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
           ))
         )}
 
-        {/* Fake upload message preview */}
-        {isUploading && (
-          <div className="flex items-start gap-3 max-w-full px-4 py-2 opacity-60">
-            <div className="size-7 rounded-full bg-zinc-800 animate-pulse shrink-0" />
-            <div className="flex flex-col max-w-[70%]">
-              <span className="text-xs font-semibold text-foreground/80">{currentUser?.name}</span>
-              <div className="flex items-center gap-2.5 bg-muted/40 rounded-xl px-4 py-3 mt-1 border border-border">
-                <Loader2 className="size-4.5 animate-spin text-primary shrink-0" />
-                <span className="text-sm font-medium text-muted-foreground truncate max-w-xs">
-                  Uploading {uploadedFileName}...
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div ref={messagesEndRef} />
       </div>
 
       {/* Compose Form */}
       <div className="p-3 border-t border-border bg-sidebar/10 shrink-0">
+        {/* Pending file preview bar */}
+        {pendingFile && (
+          <div className="mb-2 p-2.5 rounded-lg border border-primary/30 bg-primary/10 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {pendingFile.isImage ? (
+                <img src={pendingFile.fileUrl} alt="preview" className="size-10 rounded object-cover border border-border" />
+              ) : (
+                <div className="size-10 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+                  <FileText className="size-5" />
+                </div>
+              )}
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold text-foreground truncate">{pendingFile.name}</span>
+                <span className="text-[10px] text-muted-foreground">Ready to send. Click Send or press Enter.</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPendingFile(null)}
+              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+              title="Remove attachment"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSend} className="flex items-center gap-2 relative">
           {/* File attach button */}
           <button
@@ -207,7 +249,6 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
             onClick={handleAttachClick}
             className="p-2.5 bg-muted/30 hover:bg-muted border border-border hover:border-border/80 text-muted-foreground hover:text-foreground rounded-lg transition-all"
             title="Attach file (Images/PDFs only)"
-            disabled={isUploading}
           >
             <Paperclip className="size-4.5" />
           </button>
@@ -229,7 +270,6 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
             }
             value={text}
             onChange={(e) => setText(e.target.value)}
-            disabled={isUploading}
             className="flex-1 h-10 rounded-lg text-sm"
           />
 
@@ -237,7 +277,7 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
             type="submit"
             size="default"
             className="h-10 px-4 shrink-0 flex items-center justify-center"
-            disabled={!text.trim() || isUploading}
+            disabled={!text.trim() && !pendingFile}
           >
             <Send className="size-4.5" />
           </Button>
@@ -246,7 +286,7 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
           <span>Press Enter to send</span>
           {room.isEncrypted && (
             <span className="text-primary font-semibold flex items-center gap-1 select-none">
-              🔒 Messages will be scrambled on PostgreSQL homeserver.
+              🔒 End-to-End Encrypted
             </span>
           )}
         </div>

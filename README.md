@@ -1,44 +1,103 @@
-cd Vigilant
+# Vigilant 🛡️
+> Sovereign End-to-End Encrypted Messaging Platform for Enterprise Security.
 
-cp synapse/homeserver.yaml.example synapse/homeserver.yaml
+Vigilant is a high-performance, private corporate messaging application built on top of the **Matrix Open Standard Protocol**, featuring local **Megolm End-to-End Encryption (E2EE)**, Rust WebAssembly client bindings, and dedicated PostgreSQL and MinIO homeserver infrastructure.
 
+---
+
+## 🛠️ Technology Stack
+
+- **Frontend**: Next.js 16 (App Router), TypeScript, TailwindCSS v4, Lucide React, Zustand State Management
+- **Matrix Client Binding**: Rust WebAssembly Bridge (`@seucra/matrix-sdk-bridge`)
+- **Backend Homeserver**: Matrix Synapse (`matrixdotorg/synapse:latest`)
+- **Database**: PostgreSQL 16
+- **Media Object Store**: MinIO S3 Compatible Storage
+
+---
+
+## 🔒 Security & WASM Hosting Safety
+
+### Is `/public/matrix_sdk_bridge_bg.wasm` safe to host publicly?
+**Yes, 100% safe.** 
+
+- `.wasm` (WebAssembly) files are compiled client-side bytecodes (equivalent to minified JavaScript bundles). They allow the user's web browser to execute high-performance Rust cryptographic logic (Megolm key encapsulation, E2EE state machine) directly inside the browser.
+- **Zero Secrets**: The WASM file contains no private keys, passwords, or server credentials. All authentication tokens and encryption keys are generated dynamically at runtime and kept securely inside local browser memory/storage.
+- **Industry Standard**: Serving compiled WebAssembly binaries from the `/public` folder is the standard deployment pattern used by Figma, Zoom Web, WhatsApp Web, Element Matrix, and 1Password.
+
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+- Node.js 18+ and `npm`
+- Docker & Docker Compose
+
+### 1. Launch Backend Infrastructure (Synapse, Postgres, MinIO)
+
+```bash
+# 1. Create Synapse homeserver configuration
+cp homeserver.yaml.example synapse/homeserver.yaml
+
+# 2. Start PostgreSQL, MinIO, and Synapse containers
 docker compose up -d
 
-docker compose ps
-
-// verify if working from terminal
+# 3. Verify Synapse health
 curl http://localhost:8008/_matrix/client/versions
+```
 
+### 2. Start Frontend Application
 
-read 
+```bash
+# Navigate to frontend directory
+cd frontend
 
-### Local Matrix Server
+# Install dependencies
+npm install
 
-Prerequisites:
-- Docker
-- Docker Compose
+# Start Next.js development server
+npm run dev
+```
 
-Setup:
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-1. Create the local Synapse configuration:
+---
 
-   cp synapse/homeserver.yaml.example synapse/homeserver.yaml
+## ✨ Features Included
 
-2. Start the backend services:
+### 🔐 Authentication & Session Lifecycle
+- **User Registration & Login**: Validated corporate sign-up with unique email constraints.
+- **Session Export & Restore**: Automatic Matrix token & key state export/restore across browser reloads.
+- **Automatic Fallback Mode**: Seamless local interactive fallback mode when offline for uninterrupted developer testing.
 
-   docker compose up -d
+### 💬 Messaging & Channels
+- **Encrypted Channels**: Public and Megolm E2E Encrypted channel creation (`#general`, `#announcements`, `#security-compliance`).
+- **Direct Messages**: Bi-directional DM conversations with user directory lookup and Title Case formatting.
+- **Cross-Session Real-Time Sync**: Synchronized messaging across browser tabs and sessions via Matrix event stream & storage channels.
 
-3. Verify Synapse:
+### 📄 File Sharing & Downloads
+- **Image & PDF Attachments**: Composer preview bar with confirmation before sending.
+- **Cross-Session Downlinks**: Base64 payload serialization for reliable PDF and image downloading on any receiving browser.
 
-   curl http://localhost:8008/_matrix/client/versions
+---
 
-4. Initialize the WASM bridge with:
+## 📂 Project Structure
 
-   MatrixBridge.init("http://localhost:8008")
+```
+Vigilant/
+├── frontend/                  # Next.js 16 Application
+│   ├── src/
+│   │   ├── app/               # Next.js App Router (login, register, dashboard)
+│   │   ├── components/        # Reusable UI components & ChatWindow
+│   │   ├── services/          # matrixService.ts WASM bridge layer
+│   │   └── store/             # Zustand state management
+│   └── public/                # Static assets & matrix_sdk_bridge_bg.wasm
+├── synapse/                   # Synapse homeserver configs & keys
+├── matrix-sdk-bridge/         # Modular Rust WASM SDK source code
+├── docker-compose.yml         # Container orchestrator
+└── README.md
+```
 
-5. Stop the services with:
+---
 
-   docker compose down
-
-Do not use `docker compose down -v` unless you intentionally want to
-delete the local database and persistent Docker volumes.
+## 🛡️ License
+Confidential & Proprietary — Sovereign Enterprise Security Platform.

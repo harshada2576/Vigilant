@@ -26,7 +26,7 @@ export default function LoginPage() {
 
     try {
       await matrixService.login(email, password);
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err?.message || "Failed to sign in. Please verify your credentials.");
       setLoading(false);

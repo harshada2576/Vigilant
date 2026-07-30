@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@seucra/matrix-sdk-bridge": "^0.1.0"
+  }
+}
