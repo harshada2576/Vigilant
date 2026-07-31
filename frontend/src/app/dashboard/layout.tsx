@@ -75,11 +75,11 @@ export default function DashboardLayout({
     window.location.href = "/";
   };
 
-  const handleCreateRoom = (e: React.FormEvent) => {
+  const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoomName.trim()) return;
 
-    const newRoom = matrixService.createRoom(
+    const newRoom = await matrixService.createRoom(
       newRoomName,
       "channel",
       newRoomTopic,
@@ -105,32 +105,19 @@ export default function DashboardLayout({
     setDmError("");
     const cleanQuery = queryName.replace("#", "").trim().toLowerCase();
 
-    let targetObj = users.find(
+    const targetObj = users.find(
       (u) =>
-        u.name.toLowerCase() === cleanQuery ||
         u.email.toLowerCase() === cleanQuery ||
-        u.id.toLowerCase().includes(cleanQuery)
+        u.name.toLowerCase() === cleanQuery ||
+        u.id.toLowerCase() === cleanQuery ||
+        u.id.toLowerCase().startsWith(`@${cleanQuery}:`)
     );
 
-    let resolvedName = targetObj ? targetObj.name : "";
-
-    if (!resolvedName && typeof window !== "undefined") {
-      try {
-        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
-        if (userMap[cleanQuery]) {
-          resolvedName = userMap[cleanQuery];
-        }
-      } catch (err) {}
-    }
-
-    if (!resolvedName) {
-      setDmError(`User "${queryName}" not found. Please select a valid registered user.`);
-      return;
-    }
+    const targetInput = targetObj ? targetObj.id : queryName;
 
     try {
       const dmRoom = await matrixService.createRoom(
-        resolvedName,
+        targetInput,
         "dm",
         "",
         true
@@ -142,6 +129,7 @@ export default function DashboardLayout({
       router.push(`/dashboard/dm/${dmRoom.id}`);
     } catch (err) {
       console.error("Failed to start DM:", err);
+      setDmError("Failed to open DM with the selected user.");
     }
   };
 
@@ -159,39 +147,89 @@ export default function DashboardLayout({
       room.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredDMs = rooms.filter((room) => {
-    if (room.type !== "dm") return false;
-    const name = getDMDisplayName(room);
-    return name.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredDMs = React.useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    const matching = rooms.filter((room) => {
+      if (room.type !== "dm") return false;
+      return getDMDisplayName(room).toLowerCase().includes(q);
+    });
+
+    // Deduplicate by target member ID or email (preserves distinct users even if they share a first name)
+    const seenTargets = new Set<string>();
+    return matching.filter((room) => {
+      const currentId = currentUser?.id?.toLowerCase() || "";
+      const currentEmail = currentUser?.email?.toLowerCase() || "";
+      const targetMember = room.members.find(
+        (m) => m.toLowerCase() !== currentId && m.toLowerCase() !== currentEmail
+      ) || room.id;
+
+      if (seenTargets.has(targetMember.toLowerCase())) return false;
+      seenTargets.add(targetMember.toLowerCase());
+      return true;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rooms, searchQuery, currentUser, users]);
 
   function getDMDisplayName(room: Room) {
     const currentClean = (currentUser?.name || "").toLowerCase();
     const currentIdClean = (currentUser?.id || "").toLowerCase();
+    const currentEmailClean = (currentUser?.email || "").toLowerCase();
 
     const otherMember = room.members.find(
-      (m) => m.toLowerCase() !== currentClean && m.toLowerCase() !== currentIdClean
+      (m) =>
+        m.toLowerCase() !== currentClean &&
+        m.toLowerCase() !== currentIdClean &&
+        m.toLowerCase() !== currentEmailClean
     ) || room.name;
 
-    const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
+    const rawMember = otherMember.trim();
+    const cleanMember = rawMember.toLowerCase();
+    const username = cleanMember.split(":")[0].replace("@", "").toLowerCase();
 
-    const matchUser = users.find(
-      (u) =>
-        u.name.toLowerCase() === cleanMember ||
-        u.email.toLowerCase() === cleanMember ||
-        u.id.toLowerCase().includes(cleanMember)
-    );
+    // 1. Check in-memory users in Zustand store
+    const matchUser = users.find((u) => {
+      const uId = u.id.toLowerCase();
+      const uEmail = u.email.toLowerCase();
+      const uUsername = u.email.split("@")[0].toLowerCase();
+
+      return (
+        uId === cleanMember ||
+        uEmail === cleanMember ||
+        cleanMember === uUsername ||
+        cleanMember.startsWith(`@${uUsername}:`) ||
+        cleanMember === uId
+      );
+    });
     if (matchUser) return matchUser.name;
 
+    // 2. Check localStorage registered users & user map (shared across all tabs)
     if (typeof window !== "undefined") {
       try {
+        const regUsers: User[] = JSON.parse(
+          localStorage.getItem("vigilant_registered_users") || "[]"
+        );
+        const regMatch = regUsers.find((u) => {
+          const uId = u.id.toLowerCase();
+          const uEmail = u.email.toLowerCase();
+          const uUsername = u.email.split("@")[0].toLowerCase();
+          return (
+            uId === cleanMember ||
+            uEmail === cleanMember ||
+            username === uUsername ||
+            cleanMember.startsWith(`@${uUsername}:`)
+          );
+        });
+        if (regMatch) return regMatch.name;
+
         const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
         if (userMap[cleanMember]) return userMap[cleanMember];
+        if (userMap[username]) return userMap[username];
+        if (userMap[rawMember]) return userMap[rawMember];
       } catch (e) {}
     }
 
-    if (cleanMember.length > 0) {
-      return cleanMember.charAt(0).toUpperCase() + cleanMember.slice(1);
+    if (username.length > 0 && !username.startsWith("!")) {
+      return username.charAt(0).toUpperCase() + username.slice(1);
     }
     return room.name;
   }
@@ -199,19 +237,31 @@ export default function DashboardLayout({
   function getDMDisplayStatus(room: Room) {
     const currentClean = (currentUser?.name || "").toLowerCase();
     const currentIdClean = (currentUser?.id || "").toLowerCase();
+    const currentEmailClean = (currentUser?.email || "").toLowerCase();
 
     const otherMember = room.members.find(
-      (m) => m.toLowerCase() !== currentClean && m.toLowerCase() !== currentIdClean
+      (m) =>
+        m.toLowerCase() !== currentClean &&
+        m.toLowerCase() !== currentIdClean &&
+        m.toLowerCase() !== currentEmailClean
     ) || room.name;
 
     const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
 
-    const matchUser = users.find(
-      (u) =>
-        u.name.toLowerCase() === cleanMember ||
-        u.email.toLowerCase() === cleanMember ||
-        u.id.toLowerCase().includes(cleanMember)
-    );
+    const matchUser = users.find((u) => {
+      const uId = u.id.toLowerCase();
+      const uEmail = u.email.toLowerCase();
+      const uUsername = u.email.split("@")[0].toLowerCase();
+
+      return (
+        uId === cleanMember ||
+        uEmail === cleanMember ||
+        cleanMember === uUsername ||
+        cleanMember.startsWith(`@${uUsername}:`) ||
+        cleanMember === uId
+      );
+    });
+
     return matchUser ? matchUser.status : "online";
   }
 
@@ -622,31 +672,37 @@ export default function DashboardLayout({
               Valid Registered Users Directory
             </span>
             <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5 bg-muted/20 custom-scrollbar">
-              {users
-                .filter((u) => u.name.toLowerCase() !== (currentUser?.name || "").toLowerCase())
-                .map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => {
-                      setTargetDmInput(u.name);
-                      setDmError("");
-                      handleStartDM(undefined, u.name);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted text-left transition-colors font-medium text-sm group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Avatar name={u.name} status={u.status} size="sm" />
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-foreground">{u.name}</span>
-                        <span className="text-[10px] text-muted-foreground">{u.email}</span>
+              {users.filter((u) => u.name.toLowerCase() !== (currentUser?.name || "").toLowerCase()).length === 0 ? (
+                <div className="p-3 text-center text-xs text-muted-foreground">
+                  No other registered users found yet. Team members who sign up will appear here automatically.
+                </div>
+              ) : (
+                users
+                  .filter((u) => u.name.toLowerCase() !== (currentUser?.name || "").toLowerCase())
+                  .map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => {
+                        setTargetDmInput(u.email);
+                        setDmError("");
+                        handleStartDM(undefined, u.email);
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted text-left transition-colors font-medium text-sm group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={u.name} status={u.status} size="sm" />
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-foreground">{u.name}</span>
+                          <span className="text-[10px] text-muted-foreground">{u.email}</span>
+                        </div>
                       </div>
-                    </div>
-                    <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                      Chat →
-                    </span>
-                  </button>
-                ))}
+                      <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                        Chat →
+                      </span>
+                    </button>
+                  ))
+              )}
             </div>
           </div>
         </form>

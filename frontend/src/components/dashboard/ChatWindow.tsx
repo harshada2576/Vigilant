@@ -90,36 +90,54 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
     scrollToBottom();
   }, [messages, isUploading, pendingFile]);
 
-  // Sync messages periodically or on storage event
+  // Sync messages on storage event (cross-tab) or custom event (same tab)
   React.useEffect(() => {
-    const handleSync = () => {
-      if (roomId) {
+    const handleStorageEvent = (event: StorageEvent) => {
+      // Only react to changes for this specific room's messages
+      if (
+        event.key === null ||
+        event.key === `vigilant_shared_messages_${roomId}`
+      ) {
         matrixService.syncRoomMessages(roomId);
       }
     };
 
-    window.addEventListener("storage", handleSync);
-    window.addEventListener("vigilant_message_sent", handleSync);
+    const handleSameTabEvent = () => {
+      if (roomId) matrixService.syncRoomMessages(roomId);
+    };
 
-    const interval = setInterval(handleSync, 1000);
+    window.addEventListener("storage", handleStorageEvent as EventListener);
+    window.addEventListener("vigilant_message_sent", handleSameTabEvent);
+
+    // Poll every 1.5s as fallback (e.g. when Synapse delivers via bridge callback)
+    const interval = setInterval(handleSameTabEvent, 1500);
     return () => {
-      window.removeEventListener("storage", handleSync);
-      window.removeEventListener("vigilant_message_sent", handleSync);
+      window.removeEventListener("storage", handleStorageEvent as EventListener);
+      window.removeEventListener("vigilant_message_sent", handleSameTabEvent);
       clearInterval(interval);
     };
   }, [roomId]);
 
-  const handleSend = (e?: React.FormEvent) => {
+  const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if ((!text.trim() && !pendingFile) || !room) return;
 
     if (pendingFile) {
+      let fileData: Uint8Array | undefined;
+      try {
+        const buffer = await pendingFile.file.arrayBuffer();
+        fileData = new Uint8Array(buffer);
+      } catch (err) {
+        console.warn("Failed to convert file buffer to Uint8Array:", err);
+      }
+
       matrixService.sendMessage(
         room.id,
         text.trim() || (pendingFile.isImage ? "" : `Attachment: ${pendingFile.name}`),
         pendingFile.isImage ? "image" : "file",
         pendingFile.name,
-        pendingFile.fileUrl
+        pendingFile.fileUrl,
+        fileData
       );
       setPendingFile(null);
       setText("");
@@ -172,9 +190,64 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
   // Get display name for DM rooms
   const getRoomDisplayName = () => {
     if (room.type === "channel") return room.name;
-    const otherMemberId = room.members.find((m) => m !== currentUser?.id);
-    const otherUser = users.find((u) => u.id === otherMemberId);
-    return otherUser ? otherUser.name : room.name;
+    const currentId = currentUser?.id?.toLowerCase() || "";
+    const currentEmail = currentUser?.email?.toLowerCase() || "";
+    const currentName = currentUser?.name?.toLowerCase() || "";
+
+    const otherMember = room.members.find(
+      (m) =>
+        m.toLowerCase() !== currentId &&
+        m.toLowerCase() !== currentEmail &&
+        m.toLowerCase() !== currentName
+    ) || room.name;
+
+    const rawMember = otherMember.trim();
+    const cleanMember = rawMember.toLowerCase();
+    const username = cleanMember.split(":")[0].replace("@", "").toLowerCase();
+
+    // 1. Check in-memory store
+    const matchUser = users.find((u) => {
+      const uId = u.id.toLowerCase();
+      const uEmail = u.email.toLowerCase();
+      const uUsername = u.email.split("@")[0].toLowerCase();
+
+      return (
+        uId === cleanMember ||
+        uEmail === cleanMember ||
+        cleanMember === uUsername ||
+        cleanMember.startsWith(`@${uUsername}:`)
+      );
+    });
+    if (matchUser) return matchUser.name;
+
+    // 2. Check shared localStorage registered users & map
+    if (typeof window !== "undefined") {
+      try {
+        const regUsers = JSON.parse(localStorage.getItem("vigilant_registered_users") || "[]");
+        const regMatch = regUsers.find((u: any) => {
+          const uId = u.id.toLowerCase();
+          const uEmail = u.email.toLowerCase();
+          const uUsername = u.email.split("@")[0].toLowerCase();
+          return (
+            uId === cleanMember ||
+            uEmail === cleanMember ||
+            username === uUsername ||
+            cleanMember.startsWith(`@${uUsername}:`)
+          );
+        });
+        if (regMatch) return regMatch.name;
+
+        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+        if (userMap[cleanMember]) return userMap[cleanMember];
+        if (userMap[username]) return userMap[username];
+        if (userMap[rawMember]) return userMap[rawMember];
+      } catch (e) {}
+    }
+
+    if (username.length > 0 && !username.startsWith("!")) {
+      return username.charAt(0).toUpperCase() + username.slice(1);
+    }
+    return room.name;
   };
 
   return (
