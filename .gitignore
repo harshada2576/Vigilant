@@ -26,6 +26,7 @@ synapse/homeserver.yaml
 # Rust build outputs
 **/target/
 matrix-sdk-bridge/target/
+matrix-sdk-bridge/pkg/
 
 # OS and IDE temporary files
 .DS_Store
