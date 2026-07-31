@@ -35,5 +35,7 @@ yarn-error.log*
 temp*
 
 synapse/
+frontend/public/*.wasm
 frontend/public/matrix_sdk_bridge_bg.wasm
+*.wasm
 
