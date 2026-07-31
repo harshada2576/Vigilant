@@ -14,12 +14,7 @@ frontend/build/
 .env.production.local
 
 # Synapse runtime & secrets
-synapse/*.signing.key
-synapse/media_store/
-synapse/uploads/
-synapse/__pycache__/
-synapse/*.log
-synapse/homeserver.yaml
+synapse/
 
 # Rust build outputs
 **/target/
