@@ -46,12 +46,22 @@ const MOCK_ROOMS: Room[] = [
 const MOCK_MESSAGES: Record<string, Message[]> = {
   room_general: [
     {
+      id: "msg_g0",
+      roomId: "room_general",
+      senderId: "user_alice",
+      senderName: "Alice Smith (CISO)",
+      content: "Workspace initialization completed and compliance policy deployed.",
+      timestamp: Date.now() - 86400000 * 2,
+      type: "text",
+      isEncrypted: false,
+    },
+    {
       id: "msg_g1",
       roomId: "room_general",
       senderId: "user_bob",
       senderName: "Bob Jones (DevOps)",
       content: "Welcome to Vigilant Workspace! Infrastructure is ready for live messaging.",
-      timestamp: Date.now() - 3600000 * 3,
+      timestamp: Date.now() - 86400000 * 1,
       type: "text",
       isEncrypted: false,
     },
@@ -68,12 +78,22 @@ const MOCK_MESSAGES: Record<string, Message[]> = {
   ],
   room_security: [
     {
+      id: "msg_s0",
+      roomId: "room_security",
+      senderId: "user_bob",
+      senderName: "Bob Jones (DevOps)",
+      content: "Megolm cryptographic ratchets generated for room key escrow.",
+      timestamp: Date.now() - 86400000 * 3,
+      type: "text",
+      isEncrypted: true,
+    },
+    {
       id: "msg_s1",
       roomId: "room_security",
       senderId: "user_alice",
       senderName: "Alice Smith (CISO)",
       content: "All communication inside this channel is End-to-End Encrypted via Megolm.",
-      timestamp: Date.now() - 3600000 * 5,
+      timestamp: Date.now() - 86400000 * 1,
       type: "text",
       isEncrypted: true,
     },
@@ -87,7 +107,12 @@ async function getBridgeInstance() {
 
   try {
     const wasm = await import("@seucra/matrix-sdk-bridge");
-    await wasm.default("/matrix_sdk_bridge_bg.wasm");
+    try {
+      await wasm.default();
+    } catch (e) {
+      console.warn("Package-relative WASM load failed, falling back to public folder:", e);
+      await wasm.default("/matrix_sdk_bridge_bg.wasm");
+    }
     
     const homeserverUrl = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
     console.log("Initializing Matrix WASM bridge targeting:", homeserverUrl);

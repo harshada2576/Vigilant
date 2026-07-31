@@ -33,3 +33,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 temp*
+
+synapse/
+frontend/public/matrix_sdk_bridge_bg.wasm
+

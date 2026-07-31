@@ -22,6 +22,41 @@ interface ChatWindowProps {
   roomId: string;
 }
 
+function formatDateDivider(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear();
+
+  if (isToday) return "Today";
+  if (isYesterday) return "Yesterday";
+
+  const sameYear = date.getFullYear() === now.getFullYear();
+  if (sameYear) {
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function ChatWindow({ roomId }: ChatWindowProps) {
   const currentUser = useMatrixStore((state) => state.currentUser);
   const rooms = useMatrixStore((state) => state.rooms);
@@ -194,20 +229,36 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
             </p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <ChatBubble
-              key={msg.id}
-              senderName={msg.senderName}
-              senderAvatar={msg.senderAvatar}
-              content={msg.content}
-              timestamp={msg.timestamp}
-              isMe={msg.senderId === currentUser?.id}
-              isEncrypted={msg.isEncrypted}
-              type={msg.type}
-              fileName={msg.fileName}
-              fileUrl={msg.fileUrl}
-            />
-          ))
+          messages.map((msg, index) => {
+            const dateLabel = formatDateDivider(msg.timestamp);
+            const prevDateLabel = index > 0 ? formatDateDivider(messages[index - 1].timestamp) : null;
+            const showDivider = index === 0 || dateLabel !== prevDateLabel;
+
+            return (
+              <React.Fragment key={msg.id}>
+                {showDivider && (
+                  <div className="flex items-center justify-center my-4 py-1 select-none">
+                    <div className="h-px bg-border/40 flex-1" />
+                    <span className="mx-4 text-[11px] font-bold text-muted-foreground px-3 py-1 rounded-full bg-muted/40 border border-border/60 uppercase tracking-wider backdrop-blur shadow-sm">
+                      {dateLabel}
+                    </span>
+                    <div className="h-px bg-border/40 flex-1" />
+                  </div>
+                )}
+                <ChatBubble
+                  senderName={msg.senderName}
+                  senderAvatar={msg.senderAvatar}
+                  content={msg.content}
+                  timestamp={msg.timestamp}
+                  isMe={msg.senderId === currentUser?.id}
+                  isEncrypted={msg.isEncrypted}
+                  type={msg.type}
+                  fileName={msg.fileName}
+                  fileUrl={msg.fileUrl}
+                />
+              </React.Fragment>
+            );
+          })
         )}
 
         <div ref={messagesEndRef} />
