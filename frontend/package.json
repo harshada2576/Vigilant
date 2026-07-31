@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node -e \"const fs=require('fs');const src='node_modules/@seucra/matrix-sdk-bridge/matrix_sdk_bridge_bg.wasm';const dest='public/matrix_sdk_bridge_bg.wasm';if(fs.existsSync(src)){fs.copyFileSync(src,dest);console.log('WASM copied to public/');}else{console.warn('WASM source not found:',src);}\""
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

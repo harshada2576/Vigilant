@@ -68,10 +68,50 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   isSynced: false,
 
   setCurrentUser: (user) => set({ currentUser: user }),
-  setRooms: (rooms) => set({ rooms }),
+  setRooms: (rooms) => set(() => {
+    // Deduplicate channels: keep first occurrence of each room ID
+    const seen = new Set<string>();
+    // Deduplicate DMs: keep first occurrence for each sorted member fingerprint
+    const dmSeen = new Set<string>();
+    const deduped: Room[] = [];
+
+    for (const room of rooms) {
+      if (seen.has(room.id)) continue;
+      seen.add(room.id);
+
+      if (room.type === "dm") {
+        // Fingerprint = sorted lowercase members joined — identifies unique conversations
+        const fingerprint = room.members
+          .map((m) => m.toLowerCase())
+          .sort()
+          .join("|");
+        if (fingerprint && dmSeen.has(fingerprint)) continue;
+        if (fingerprint) dmSeen.add(fingerprint);
+      }
+
+      deduped.push(room);
+    }
+
+    return { rooms: deduped };
+  }),
   addRoom: (room) => set((state) => {
-    // Prevent duplicates
+    // Prevent duplicates by ID
     if (state.rooms.some((r) => r.id === room.id)) return {};
+
+    // For DMs: also prevent creating a second room for the same pair of users
+    if (room.type === "dm" && room.members.length > 0) {
+      const incomingMembers = new Set(room.members.map((m) => m.toLowerCase()));
+      const duplicateDM = state.rooms.find((r) => {
+        if (r.type !== "dm" || r.members.length === 0) return false;
+        const existingMembers = new Set(r.members.map((m) => m.toLowerCase()));
+        // If every member in the new room is already in an existing room, it's a duplicate
+        let overlap = 0;
+        incomingMembers.forEach((m) => { if (existingMembers.has(m)) overlap++; });
+        return overlap >= Math.min(incomingMembers.size, existingMembers.size) && overlap >= 1;
+      });
+      if (duplicateDM) return {};
+    }
+
     return { rooms: [room, ...state.rooms] };
   }),
   leaveRoom: (roomId) => set((state) => ({
