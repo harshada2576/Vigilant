@@ -15,6 +15,13 @@ frontend/build/
 
 # Synapse runtime & secrets
 synapse/
+synapse/*
+synapse/*.signing.key
+synapse/media_store/
+synapse/uploads/
+synapse/__pycache__/
+synapse/*.log
+synapse/homeserver.yaml
 
 # Rust build outputs
 **/target/
