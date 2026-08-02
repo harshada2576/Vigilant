@@ -57,9 +57,9 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Onboarding Tasks card */}
-        <div className="lg:col-span-2 rounded-xl border border-border bg-card/15 p-6 glass-card space-y-5">
+        <div className="rounded-xl border border-border bg-card/15 p-6 glass-card space-y-5">
           <h3 className="font-heading font-bold text-base text-foreground flex items-center gap-2">
             <MessageSquareCode className="size-5 text-primary" />
             Quick Start Guide
@@ -68,84 +68,25 @@ export default function DashboardHome() {
             <div className="flex gap-3">
               <span className="flex size-6 shrink-0 items-center justify-center rounded bg-primary/10 text-primary text-xs font-bold border border-primary/20">1</span>
               <div>
-                <h4 className="font-bold text-foreground mb-0.5">Explore the General Channel</h4>
-                <p className="leading-relaxed">Join the `#general` channel to chat with bots, developers, and view infrastructure performance logs.</p>
+                <h4 className="font-bold text-foreground mb-0.5">Explore Channels</h4>
+                <p className="leading-relaxed">Join public or encrypted channels in the sidebar to send text messages and documents.</p>
               </div>
             </div>
 
             <div className="flex gap-3">
               <span className="flex size-6 shrink-0 items-center justify-center rounded bg-primary/10 text-primary text-xs font-bold border border-primary/20">2</span>
               <div>
-                <h4 className="font-bold text-foreground mb-0.5">Check Secure Compliance Channels</h4>
-                <p className="leading-relaxed">Open `#security-compliance` 🔒 to see how Megolm group chat key handshakes and PDF document downlinks are rendered natively.</p>
+                <h4 className="font-bold text-foreground mb-0.5">Start Direct Messages</h4>
+                <p className="leading-relaxed">Click the + button next to Direct Messages in the sidebar to start a conversation with any user.</p>
               </div>
             </div>
 
             <div className="flex gap-3">
               <span className="flex size-6 shrink-0 items-center justify-center rounded bg-primary/10 text-primary text-xs font-bold border border-primary/20">3</span>
               <div>
-                <h4 className="font-bold text-foreground mb-0.5">Start Direct Messages</h4>
-                <p className="leading-relaxed">Select Harshada or Alice from the sidebar list. Send a test message and witness immediate mock responders simulating Synapse event relays.</p>
+                <h4 className="font-bold text-foreground mb-0.5">End-to-End Encryption</h4>
+                <p className="leading-relaxed">All messages inside encrypted rooms are protected locally on your device before transmission.</p>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* System Diagnostics status panel */}
-        <div className="rounded-xl border border-border bg-card/15 p-6 glass-card space-y-5">
-          <h3 className="font-heading font-bold text-base text-foreground flex items-center gap-2">
-            <Activity className="size-5 text-emerald-500" />
-            Server Diagnostics
-          </h3>
-          <div className="space-y-4 font-sans text-sm">
-            <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Database className="size-4 shrink-0" />
-                PostgreSQL Status
-              </span>
-              <span className="text-xs font-bold text-emerald-500 uppercase tracking-wide">
-                Healthy
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <LinkIcon className="size-4 shrink-0" />
-                MinIO Media S3
-              </span>
-              <span className="text-xs font-bold text-emerald-500 uppercase tracking-wide">
-                Connected
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Key className="size-4 shrink-0" />
-                Megolm Key Escrow
-              </span>
-              <span className="text-xs font-bold text-emerald-500 uppercase tracking-wide">
-                Active
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Terminal className="size-4 shrink-0" />
-                Synapse Version
-              </span>
-              <span className="text-xs font-semibold text-foreground">
-                v1.112.0
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-1">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <HelpCircle className="size-4 shrink-0" />
-                Matrix Spec SDK
-              </span>
-              <span className="text-xs font-semibold text-foreground">
-                v1.11 WASM
-              </span>
             </div>
           </div>
         </div>

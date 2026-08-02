@@ -24,8 +24,8 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await matrixService.register(name, email);
-      router.push("/dashboard");
+      await matrixService.register(name, email, password);
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err?.message || "Failed to create account. Please contact your system administrator.");
       setLoading(false);

@@ -1,15 +1,15 @@
 import { useMatrixStore, User, Room, Message } from "../store/matrixStore";
 
-// Pre-seeded mock users
+let bridgeInstance: any = null;
+
+// Pre-seeded mock data for interactive local mode
 const MOCK_USERS: User[] = [
-  { id: "user_lakshya", name: "Lakshya (You)", email: "lakshya@vigilant.co", avatarUrl: "", status: "online" },
-  { id: "user_harshada", name: "Harshada", email: "harshada@vigilant.co", avatarUrl: "", status: "online" },
-  { id: "user_alice", name: "Alice Smith (CISO)", email: "alice@vigilant.co", avatarUrl: "", status: "busy" },
-  { id: "user_bob", name: "Bob Jones (DevOps)", email: "bob@vigilant.co", avatarUrl: "", status: "offline" },
-  { id: "user_synapse", name: "Synapse Bot", email: "bot@synapse.local", avatarUrl: "", status: "online" },
+  { id: "user_harshada", name: "Harshada", email: "harshada@vigilant.co", status: "online" },
+  { id: "user_rushikesh", name: "Rushikesh", email: "rushikesh@vigilant.co", status: "online" },
+  { id: "user_alice", name: "Alice Smith (CISO)", email: "alice@vigilant.co", status: "busy" },
+  { id: "user_bob", name: "Bob Jones (DevOps)", email: "bob@vigilant.co", status: "offline" },
 ];
 
-// Pre-seeded mock rooms
 const MOCK_ROOMS: Room[] = [
   {
     id: "room_general",
@@ -17,7 +17,7 @@ const MOCK_ROOMS: Room[] = [
     topic: "Company-wide discussions and watercooler talk",
     type: "channel",
     unreadCount: 0,
-    members: ["user_lakshya", "user_harshada", "user_alice", "user_bob", "user_synapse"],
+    members: ["user_harshada", "user_rushikesh", "user_alice", "user_bob"],
     isEncrypted: false,
     createdAt: Date.now() - 86400000 * 5,
   },
@@ -27,7 +27,7 @@ const MOCK_ROOMS: Room[] = [
     topic: "Important announcements and policy updates",
     type: "channel",
     unreadCount: 0,
-    members: ["user_lakshya", "user_harshada", "user_alice", "user_bob"],
+    members: ["user_harshada", "user_rushikesh", "user_alice", "user_bob"],
     isEncrypted: false,
     createdAt: Date.now() - 86400000 * 10,
   },
@@ -37,312 +37,646 @@ const MOCK_ROOMS: Room[] = [
     topic: "E2E Encrypted channel for secure audits, keys and keys escrow discussion",
     type: "channel",
     unreadCount: 0,
-    members: ["user_lakshya", "user_harshada", "user_alice"],
+    members: ["user_harshada", "user_rushikesh", "user_alice"],
     isEncrypted: true,
     createdAt: Date.now() - 86400000 * 3,
   },
-  {
-    id: "room_dm_harshada",
-    name: "Harshada",
-    type: "dm",
-    unreadCount: 2,
-    members: ["user_lakshya", "user_harshada"],
-    isEncrypted: true,
-    createdAt: Date.now() - 86400000,
-  },
-  {
-    id: "room_dm_alice",
-    name: "Alice Smith",
-    type: "dm",
-    unreadCount: 0,
-    members: ["user_lakshya", "user_alice"],
-    isEncrypted: true,
-    createdAt: Date.now() - 86400000 * 2,
-  },
 ];
 
-// Pre-seeded mock messages
 const MOCK_MESSAGES: Record<string, Message[]> = {
   room_general: [
     {
+      id: "msg_g0",
+      roomId: "room_general",
+      senderId: "user_alice",
+      senderName: "Alice Smith (CISO)",
+      content: "Workspace initialization completed and compliance policy deployed.",
+      timestamp: Date.now() - 86400000 * 2,
+      type: "text",
+      isEncrypted: false,
+    },
+    {
       id: "msg_g1",
       roomId: "room_general",
-      senderId: "user_synapse",
-      senderName: "Synapse Bot",
-      content: "Welcome to Vigilant! Synapse Homeserver is online and PostgreSQL is connected.",
-      timestamp: Date.now() - 3600000 * 4,
+      senderId: "user_bob",
+      senderName: "Bob Jones (DevOps)",
+      content: "Welcome to Vigilant Workspace! Infrastructure is ready for live messaging.",
+      timestamp: Date.now() - 86400000 * 1,
       type: "text",
       isEncrypted: false,
     },
     {
       id: "msg_g2",
       roomId: "room_general",
-      senderId: "user_bob",
-      senderName: "Bob Jones (DevOps)",
-      content: "Docker stack is fully deployed. CPU utilization is looking healthy at 2%. Let me know if anyone experiences delays.",
-      timestamp: Date.now() - 3600000 * 3,
-      type: "text",
-      isEncrypted: false,
-    },
-    {
-      id: "msg_g3",
-      roomId: "room_general",
       senderId: "user_harshada",
       senderName: "Harshada",
-      content: "Looks great Bob! I'm starting work on the landing page UI layout today.",
+      content: "Feel free to explore the channels, create new rooms, and test DMs!",
       timestamp: Date.now() - 3600000 * 2,
-      type: "text",
-      isEncrypted: false,
-    },
-  ],
-  room_announcements: [
-    {
-      id: "msg_a1",
-      roomId: "room_announcements",
-      senderId: "user_alice",
-      senderName: "Alice Smith (CISO)",
-      content: "Reminder: All communication containing customer identifiers or architectural credentials MUST be sent in encrypted rooms. Check the room settings to ensure Megolm encryption is enabled.",
-      timestamp: Date.now() - 3600000 * 24,
       type: "text",
       isEncrypted: false,
     },
   ],
   room_security: [
     {
+      id: "msg_s0",
+      roomId: "room_security",
+      senderId: "user_bob",
+      senderName: "Bob Jones (DevOps)",
+      content: "Megolm cryptographic ratchets generated for room key escrow.",
+      timestamp: Date.now() - 86400000 * 3,
+      type: "text",
+      isEncrypted: true,
+    },
+    {
       id: "msg_s1",
       roomId: "room_security",
       senderId: "user_alice",
       senderName: "Alice Smith (CISO)",
-      content: "I have configured the Megolm sessions. The key rotation policy is set to 100 messages or 7 days.",
-      timestamp: Date.now() - 3600000 * 5,
-      type: "text",
-      isEncrypted: true,
-    },
-    {
-      id: "msg_s2",
-      roomId: "room_security",
-      senderId: "user_lakshya",
-      senderName: "Lakshya (You)",
-      content: "Perfect, the Rust WASM client local store is configured to cache keys in an encrypted SQLite database on the client side.",
-      timestamp: Date.now() - 3600000 * 4,
-      type: "text",
-      isEncrypted: true,
-    },
-    {
-      id: "msg_s3",
-      roomId: "room_security",
-      senderId: "user_alice",
-      senderName: "Alice Smith (CISO)",
-      content: "Excellent. Here is the PDF mapping our sovereign key escrow design.",
-      timestamp: Date.now() - 3600000 * 3,
-      type: "file",
-      fileName: "sovereign-key-escrow.pdf",
-      fileUrl: "/mock-files/sovereign-key-escrow.pdf",
-      isEncrypted: true,
-    },
-  ],
-  room_dm_harshada: [
-    {
-      id: "msg_dh1",
-      roomId: "room_dm_harshada",
-      senderId: "user_lakshya",
-      senderName: "Lakshya (You)",
-      content: "Hey Harshada, did you finish the layout specs for the login page?",
-      timestamp: Date.now() - 3600000 * 2,
-      type: "text",
-      isEncrypted: true,
-    },
-    {
-      id: "msg_dh2",
-      roomId: "room_dm_harshada",
-      senderId: "user_harshada",
-      senderName: "Harshada",
-      content: "Yes, I uploaded the mockup files here. Let me know what you think of the gradient accents!",
-      timestamp: Date.now() - 3600000 * 1,
-      type: "text",
-      isEncrypted: true,
-    },
-    {
-      id: "msg_dh3",
-      roomId: "room_dm_harshada",
-      senderId: "user_harshada",
-      senderName: "Harshada",
-      content: "Here is the desktop mock image:",
-      timestamp: Date.now() - 3600000 * 0.9,
-      type: "image",
-      fileName: "login-mock.png",
-      fileUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop",
-      isEncrypted: true,
-    },
-  ],
-  room_dm_alice: [
-    {
-      id: "msg_da1",
-      roomId: "room_dm_alice",
-      senderId: "user_alice",
-      senderName: "Alice Smith (CISO)",
-      content: "Hey, are we still on track for checking the SAS verification flow?",
-      timestamp: Date.now() - 3600000 * 12,
-      type: "text",
-      isEncrypted: true,
-    },
-    {
-      id: "msg_da2",
-      roomId: "room_dm_alice",
-      senderId: "user_lakshya",
-      senderName: "Lakshya (You)",
-      content: "Yes, we will show the SAS Emoji dialog interface where you can cross-compare the short code string with Alice's screen.",
-      timestamp: Date.now() - 3600000 * 11,
+      content: "All communication inside this channel is End-to-End Encrypted via Megolm.",
+      timestamp: Date.now() - 86400000 * 1,
       type: "text",
       isEncrypted: true,
     },
   ],
 };
 
-let notificationPermission: string = "default";
-if (typeof window !== "undefined") {
-  notificationPermission = Notification.permission;
+// Dynamic wrapper to safely import WASM on the client side only
+async function getBridgeInstance() {
+  if (typeof window === "undefined") return null;
+  if (bridgeInstance) return bridgeInstance;
+
+  try {
+    const wasm = await import("@seucra/matrix-sdk-bridge");
+    try {
+      await wasm.default();
+    } catch (e) {
+      console.warn("Package-relative WASM load failed, falling back to public folder:", e);
+      await wasm.default("/matrix_sdk_bridge_bg.wasm");
+    }
+    
+    const homeserverUrl = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
+    console.log("Initializing Matrix WASM bridge targeting:", homeserverUrl);
+    
+    bridgeInstance = await wasm.MatrixBridge.init(homeserverUrl);
+    return bridgeInstance;
+  } catch (error) {
+    console.warn("Matrix WASM SDK Bridge not reachable directly:", error);
+    return null;
+  }
 }
 
 class MatrixService {
-  private syncTimer: NodeJS.Timeout | null = null;
-  private botMessageTimer: NodeJS.Timeout | null = null;
+  private isInitialised = false;
 
-  init() {
+  async init() {
+    if (typeof window === "undefined" || this.isInitialised) return;
+    this.isInitialised = true;
+
     const store = useMatrixStore.getState();
     store.setConnecting(true);
 
-    // Load state from local storage or fall back to defaults
-    const savedUser = typeof window !== "undefined" ? localStorage.getItem("vigilant_user") : null;
-    if (savedUser) {
-      try {
-        const user = JSON.parse(savedUser);
-        store.setCurrentUser(user);
-      } catch (e) {
-        console.error("Failed to parse saved user credentials", e);
+    try {
+      const savedUserJson = localStorage.getItem("vigilant_user");
+
+      if (savedUserJson) {
+        const currentUser = JSON.parse(savedUserJson);
+        store.setCurrentUser(currentUser);
+        this.loadMockData(store);
+
+        const bridge = await getBridgeInstance();
+        const savedSession = localStorage.getItem("matrix_session");
+
+        if (bridge && savedSession) {
+          try {
+            console.log("Restoring active Matrix session...");
+            await bridge.restore_session(savedSession);
+            this.setupCallbacks(bridge);
+            bridge.start_sync();
+            await this.syncRooms(bridge);
+          } catch (e) {
+            console.warn("Remote session restore skipped, using local state:", e);
+          }
+        }
+        
+        store.setSynced(true);
       }
-    }
-
-    // Simulate connecting & syncing to Synapse Homeserver
-    this.syncTimer = setTimeout(() => {
+    } catch (error) {
+      console.error("Failed to restore session:", error);
+    } finally {
       store.setConnecting(false);
-      store.setSynced(true);
-      store.setUsers(MOCK_USERS);
-      
-      // Load preseeded rooms and messages
-      store.setRooms(MOCK_ROOMS);
-      Object.entries(MOCK_MESSAGES).forEach(([roomId, msgs]) => {
-        store.setMessages(roomId, msgs);
-      });
-
-      console.log("Matrix SDK mock synced successfully with Synapse homeserver.");
-      
-      // Start dynamic messages simulation
-      this.startSimulation();
-    }, 1200);
-
-    // Request notification permission if available
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().then((perm) => {
-        notificationPermission = perm;
-      });
     }
   }
 
-  destroy() {
-    if (this.syncTimer) clearTimeout(this.syncTimer);
-    if (this.botMessageTimer) clearInterval(this.botMessageTimer);
+  private loadMockData(store: any) {
+    const currentUser = store.currentUser;
+    let allUsers = [...MOCK_USERS];
+    
+    if (typeof window !== "undefined") {
+      try {
+        const savedRegistered = JSON.parse(localStorage.getItem("vigilant_registered_users") || "[]");
+        savedRegistered.forEach((u: User) => {
+          if (!allUsers.some(existing => existing.email.toLowerCase() === u.email.toLowerCase() || existing.id === u.id)) {
+            allUsers.push(u);
+          }
+        });
+      } catch (e) {}
+    }
+    store.setUsers(allUsers);
+    
+    // Load shared rooms across users
+    let sharedRooms: Room[] = [...MOCK_ROOMS];
+    if (typeof window !== "undefined") {
+      try {
+        const savedRooms = JSON.parse(localStorage.getItem("vigilant_shared_rooms") || "[]");
+        savedRooms.forEach((sr: Room) => {
+          if (!sharedRooms.some((r) => r.id === sr.id)) {
+            sharedRooms.push(sr);
+          }
+        });
+      } catch (e) {}
+    }
+
+    // Filter rooms visible to current logged in user
+    if (currentUser) {
+      const currentUserNameClean = currentUser.name.toLowerCase();
+      const currentUserIdClean = currentUser.id.toLowerCase();
+      const currentUserEmailClean = currentUser.email.toLowerCase();
+
+      const userVisibleRooms = sharedRooms.filter((room) => {
+        if (room.type === "channel") return true;
+        
+        // DM room visibility check
+        const isMember = room.members.some((m) => {
+          const mClean = m.toLowerCase();
+          return mClean === currentUserIdClean || mClean === currentUserNameClean || mClean.includes(currentUserNameClean);
+        });
+
+        const isNameMatch = room.name.toLowerCase() === currentUserNameClean || room.name.toLowerCase() === currentUserEmailClean;
+
+        return isMember || isNameMatch;
+      });
+
+      store.setRooms(userVisibleRooms);
+
+      // Load messages for each room
+      userVisibleRooms.forEach((r) => {
+        const savedMsgs = localStorage.getItem(`vigilant_shared_messages_${r.id}`);
+        if (savedMsgs) {
+          try {
+            store.setMessages(r.id, JSON.parse(savedMsgs));
+          } catch (e) {}
+        } else if (MOCK_MESSAGES[r.id]) {
+          store.setMessages(r.id, MOCK_MESSAGES[r.id]);
+        }
+      });
+    } else {
+      store.setRooms(sharedRooms);
+    }
   }
 
-  async login(email: string): Promise<User> {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const normalizedEmail = email.toLowerCase().trim();
-        // Map admin credentials to the lakshya profile for demo continuity
-        const targetSearch = (normalizedEmail === "admin@vigilant.co" || normalizedEmail === "admin")
-          ? "lakshya@vigilant.co"
-          : normalizedEmail;
+  syncRoomMessages(roomId: string) {
+    const store = useMatrixStore.getState();
+    if (typeof window === "undefined") return;
 
-        const matchedUser = MOCK_USERS.find(
-          (u) => 
-            u.email.toLowerCase() === targetSearch ||
-            u.email.split("@")[0].toLowerCase() === targetSearch ||
-            u.name.toLowerCase().replace(/\s*\(you\)/, "").toLowerCase().trim() === targetSearch
-        ) || {
-          id: `user_${Math.random().toString(36).substring(2, 9)}`,
-          name: email.split("@")[0],
-          email: email,
-          avatarUrl: "",
-          status: "online" as const,
+    const savedMsgs = localStorage.getItem(`vigilant_shared_messages_${roomId}`);
+    if (savedMsgs) {
+      try {
+        const parsed: Message[] = JSON.parse(savedMsgs);
+        const current = store.messages[roomId] || [];
+        if (parsed.length !== current.length) {
+          store.setMessages(roomId, parsed);
+        }
+      } catch (e) {}
+    }
+  }
+
+  private setupCallbacks(bridge: any) {
+    const store = useMatrixStore.getState();
+
+    bridge.on_message((jsonMsg: string) => {
+      try {
+        const msg = JSON.parse(jsonMsg);
+        
+        const existingMessages = store.messages[msg.room_id] || [];
+        const isDuplicate = existingMessages.some(
+          (m) => m.timestamp === msg.timestamp && m.content === msg.body
+        );
+        if (isDuplicate) return;
+
+        const senderLocalpart = msg.sender.split(":")[0].substring(1);
+
+        const translatedMessage: Message = {
+          id: `${msg.room_id}_${msg.timestamp}_${Math.random().toString(36).substring(2, 7)}`,
+          roomId: msg.room_id,
+          senderId: msg.sender,
+          senderName: senderLocalpart,
+          content: msg.body,
+          timestamp: msg.timestamp,
+          type: msg.message_type as "text" | "image" | "file",
+          isEncrypted: msg.message_uri !== null || msg.mime_type !== null,
+          fileName: msg.body.includes(".") ? msg.body : undefined,
         };
 
-        const store = useMatrixStore.getState();
-        store.setCurrentUser(matchedUser);
+        store.addMessage(msg.room_id, translatedMessage);
+      } catch (err) {
+        console.error("Error parsing incoming live message:", err);
+      }
+    });
 
-        if (typeof window !== "undefined") {
-          localStorage.setItem("vigilant_user", JSON.stringify(matchedUser));
+    bridge.on_notification((jsonNotif: string) => {
+      try {
+        const notif = JSON.parse(jsonNotif);
+        if (typeof window !== "undefined" && Notification.permission === "granted") {
+          const senderLocal = notif.sender.split(":")[0].substring(1);
+          new Notification(`Vigilant - Secure Chat`, {
+            body: `${senderLocal}: ${notif.body}`,
+          });
         }
-
-        resolve(matchedUser);
-      }, 500);
+      } catch (err) {
+        console.error("Error parsing incoming notification:", err);
+      }
     });
   }
 
-  async register(name: string, email: string): Promise<User> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const newUser: User = {
-          id: `user_${Math.random().toString(36).substring(2, 9)}`,
-          name,
-          email,
-          avatarUrl: "",
+  async syncRooms(bridge: any) {
+    const store = useMatrixStore.getState();
+    try {
+      const rawChannels = await bridge.list_joined_rooms();
+      const joinedChannels = JSON.parse(rawChannels);
+      
+      const channelsList: Room[] = joinedChannels.map((c: any) => ({
+        id: c.room_id,
+        name: c.name,
+        topic: "Sync-active Matrix channel",
+        type: "channel" as const,
+        unreadCount: 0,
+        members: [],
+        isEncrypted: false,
+        createdAt: Date.now(),
+      }));
+
+      const rawDMs = await bridge.list_direct_messages();
+      const joinedDMs = JSON.parse(rawDMs);
+      
+      const dmsList: Room[] = joinedDMs.map((dm: any) => ({
+        id: dm.room_id,
+        name: dm.name,
+        topic: "Direct message",
+        type: "dm" as const,
+        unreadCount: 0,
+        members: dm.targets || [],
+        isEncrypted: true,
+        createdAt: Date.now(),
+      }));
+
+      if (channelsList.length > 0 || dmsList.length > 0) {
+        store.setRooms([...channelsList, ...dmsList]);
+      }
+    } catch (err) {
+      console.error("Failed to sync rooms from WASM bridge:", err);
+    }
+  }
+
+  async login(email: string, password: string): Promise<User> {
+    const store = useMatrixStore.getState();
+    store.setConnecting(true);
+
+    const username = email.includes("@") ? email.split("@")[0] : email;
+
+    try {
+      const bridge = await getBridgeInstance();
+      if (bridge) {
+        console.log(`Attempting login via WASM bridge for: ${username}`);
+        await bridge.login(username, password);
+
+        const exportedSession = bridge.export_session();
+        if (exportedSession) {
+          localStorage.setItem("matrix_session", exportedSession);
+        }
+
+        let displayName = username;
+        if (typeof window !== "undefined") {
+          try {
+            const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+            if (userMap[email]) displayName = userMap[email];
+            else if (userMap[username]) displayName = userMap[username];
+          } catch (e) {}
+        }
+
+        const loggedUser: User = {
+          id: `@${username}:localhost`,
+          name: displayName,
+          email: email.includes("@") ? email : `${username}@vigilant.co`,
           status: "online",
         };
 
-        const store = useMatrixStore.getState();
-        store.setCurrentUser(newUser);
+        localStorage.setItem("vigilant_user", JSON.stringify(loggedUser));
+        store.setCurrentUser(loggedUser);
 
-        if (typeof window !== "undefined") {
-          localStorage.setItem("vigilant_user", JSON.stringify(newUser));
+        this.setupCallbacks(bridge);
+        bridge.start_sync();
+        await this.syncRooms(bridge);
+        store.setSynced(true);
+
+        return loggedUser;
+      }
+    } catch (error: any) {
+      console.warn("WASM bridge login failed, switching to local interactive mode:", error);
+    }
+
+    // Fallback mode when WASM bridge/homeserver is not active locally
+    let displayName = username.charAt(0).toUpperCase() + username.slice(1);
+    if (username.toLowerCase() === "harshada" || email.toLowerCase().includes("harshada")) {
+      displayName = "Harshada";
+    } else if (username.toLowerCase() === "rushikesh" || email.toLowerCase().includes("rushikesh")) {
+      displayName = "Rushikesh";
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+        if (userMap[email] && userMap[email] !== "Duplicate Test") displayName = userMap[email];
+        else if (userMap[username] && userMap[username] !== "Duplicate Test") displayName = userMap[username];
+      } catch (e) {}
+    }
+
+    const loggedUser: User = {
+      id: `user_${username}`,
+      name: displayName,
+      email: email.includes("@") ? email : `${username}@vigilant.co`,
+      status: "online",
+    };
+
+    localStorage.setItem("vigilant_user", JSON.stringify(loggedUser));
+    store.setCurrentUser(loggedUser);
+    this.loadMockData(store);
+    store.setSynced(true);
+    store.setConnecting(false);
+
+    return loggedUser;
+  }
+
+  async register(name: string, email: string, password: string): Promise<User> {
+    const store = useMatrixStore.getState();
+    store.setConnecting(true);
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check unique email constraint
+    if (typeof window !== "undefined") {
+      try {
+        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+        if (userMap[cleanEmail]) {
+          store.setConnecting(false);
+          throw new Error("An account with this email address already exists. Please sign in or use a different email.");
+        }
+      } catch (e: any) {
+        if (e.message.includes("already exists")) {
+          throw e;
+        }
+      }
+    }
+
+    const username = cleanEmail.includes("@") ? cleanEmail.split("@")[0] : cleanEmail;
+    const finalDisplayName = name.trim() || username;
+
+    try {
+      const bridge = await getBridgeInstance();
+      if (bridge) {
+        console.log(`Registering account via WASM bridge for: ${username}`);
+        await bridge.register(username, password);
+        await bridge.login(username, password);
+
+        const exportedSession = bridge.export_session();
+        if (exportedSession) {
+          localStorage.setItem("matrix_session", exportedSession);
         }
 
-        resolve(newUser);
-      }, 600);
+        const registeredUser: User = {
+          id: `@${username}:localhost`,
+          name: finalDisplayName,
+          email: cleanEmail,
+          status: "online",
+        };
+
+        if (typeof window !== "undefined") {
+          try {
+            const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+            userMap[cleanEmail] = finalDisplayName;
+            userMap[username] = finalDisplayName;
+            localStorage.setItem("vigilant_users_map", JSON.stringify(userMap));
+
+            const userList = JSON.parse(localStorage.getItem("vigilant_registered_users") || "[]");
+            if (!userList.some((u: User) => u.email === cleanEmail)) {
+              userList.push(registeredUser);
+              localStorage.setItem("vigilant_registered_users", JSON.stringify(userList));
+            }
+          } catch (e) {}
+        }
+
+        localStorage.setItem("vigilant_user", JSON.stringify(registeredUser));
+        store.setCurrentUser(registeredUser);
+
+        this.setupCallbacks(bridge);
+        bridge.start_sync();
+        await this.syncRooms(bridge);
+        store.setSynced(true);
+
+        return registeredUser;
+      }
+    } catch (error: any) {
+      if (error.message && error.message.includes("already exists")) {
+        throw error;
+      }
+      console.warn("WASM bridge registration failed, switching to local interactive mode:", error);
+    }
+
+    // Fallback mode when WASM bridge/homeserver is not active locally
+    const registeredUser: User = {
+      id: `user_${username}`,
+      name: finalDisplayName,
+      email: cleanEmail,
+      status: "online",
+    };
+
+    if (typeof window !== "undefined") {
+      try {
+        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+        userMap[cleanEmail] = finalDisplayName;
+        userMap[username] = finalDisplayName;
+        localStorage.setItem("vigilant_users_map", JSON.stringify(userMap));
+
+        const userList = JSON.parse(localStorage.getItem("vigilant_registered_users") || "[]");
+        if (!userList.some((u: User) => u.email === cleanEmail)) {
+          userList.push(registeredUser);
+          localStorage.setItem("vigilant_registered_users", JSON.stringify(userList));
+        }
+      } catch (e) {}
+    }
+
+    localStorage.setItem("vigilant_user", JSON.stringify(registeredUser));
+    store.setCurrentUser(registeredUser);
+    this.loadMockData(store);
+    store.setSynced(true);
+    store.setConnecting(false);
+
+    return registeredUser;
+  }
+
+  destroy() {
+    this.isInitialised = false;
+    getBridgeInstance().then((bridge) => {
+      if (bridge) {
+        try {
+          bridge.stop_sync();
+        } catch (e) {
+          console.warn("WASM bridge stop sync error:", e);
+        }
+      }
     });
   }
 
-  logout() {
+  async logout() {
     const store = useMatrixStore.getState();
-    store.reset();
+    try {
+      const bridge = await getBridgeInstance();
+      if (bridge) {
+        bridge.stop_sync();
+        await bridge.logout();
+      }
+    } catch (err) {
+      console.error("Error logging out of bridge session:", err);
+    } finally {
+      this.clearLocalSession();
+      store.reset();
+      this.isInitialised = false;
+    }
+  }
+
+  private clearLocalSession() {
     if (typeof window !== "undefined") {
+      localStorage.removeItem("matrix_session");
       localStorage.removeItem("vigilant_user");
     }
-    this.destroy();
+  }
+
+  async getRoomHistory(roomId: string, limit = 50) {
+    const store = useMatrixStore.getState();
+    try {
+      const bridge = await getBridgeInstance();
+      if (!bridge) return;
+
+      const rawHistory = await bridge.get_room_history(roomId, limit);
+      const history = JSON.parse(rawHistory);
+
+      const translatedMessages: Message[] = (history.messages || []).map((msg: any) => {
+        const senderLocal = msg.sender.split(":")[0].substring(1);
+        return {
+          id: `${msg.room_id}_${msg.timestamp}_${Math.random().toString(36).substring(2, 7)}`,
+          roomId: msg.room_id,
+          senderId: msg.sender,
+          senderName: senderLocal,
+          content: msg.body,
+          timestamp: msg.timestamp,
+          type: msg.message_type as "text" | "image" | "file",
+          isEncrypted: msg.message_uri !== null || msg.mime_type !== null,
+          fileName: msg.body.includes(".") ? msg.body : undefined,
+        };
+      });
+
+      if (translatedMessages.length > 0) {
+        store.setMessages(roomId, translatedMessages);
+      }
+    } catch (err) {
+      console.error(`Failed to load room history for ${roomId}:`, err);
+    }
   }
 
   createRoom(name: string, type: "channel" | "dm", topic?: string, isEncrypted = false): Room {
     const store = useMatrixStore.getState();
     const currentUser = store.currentUser;
+    const cleanTargetName = name.replace("#", "").trim();
+
+    // Check if DM room between these users already exists
+    if (type === "dm") {
+      const existingDM = store.rooms.find(
+        (r) => r.type === "dm" && (r.name.toLowerCase() === cleanTargetName.toLowerCase() || r.members.some(m => m.toLowerCase().includes(cleanTargetName.toLowerCase())))
+      );
+      if (existingDM) {
+        return existingDM;
+      }
+    }
+
     const roomId = `room_${Math.random().toString(36).substring(2, 9)}`;
-    
+
+    // Perform background creation attempt if WASM bridge is active
+    getBridgeInstance().then(async (bridge) => {
+      if (bridge) {
+        try {
+          if (type === "channel") {
+            const rId = await bridge.create_room(cleanTargetName);
+            await bridge.join_room(rId);
+          } else {
+            const targetUserId = cleanTargetName.includes(":") ? cleanTargetName : `@${cleanTargetName}:localhost`;
+            await bridge.get_or_create_direct_message(targetUserId);
+          }
+        } catch (e) {
+          console.warn("WASM bridge room creation skipped:", e);
+        }
+      }
+    });
+
+    // Lookup target user metadata for DM rooms
+    let membersList = currentUser ? [currentUser.id, currentUser.name] : [];
+    if (type === "dm") {
+      membersList.push(cleanTargetName);
+      const targetUserObj = store.users.find(
+        (u) => u.name.toLowerCase() === cleanTargetName.toLowerCase() || u.email.toLowerCase() === cleanTargetName.toLowerCase()
+      );
+      if (targetUserObj) {
+        membersList.push(targetUserObj.id, targetUserObj.name);
+      }
+    }
+
     const newRoom: Room = {
       id: roomId,
-      name: name.replace("#", "").trim(),
-      topic,
+      name: cleanTargetName,
+      topic: topic || "",
       type,
       unreadCount: 0,
-      members: currentUser ? [currentUser.id] : [],
-      isEncrypted,
+      members: Array.from(new Set(membersList)),
+      isEncrypted: isEncrypted || type === "dm",
       createdAt: Date.now(),
     };
 
     store.addRoom(newRoom);
+
+    // Save to shared rooms in local storage
+    if (typeof window !== "undefined") {
+      try {
+        const sharedRooms: Room[] = JSON.parse(localStorage.getItem("vigilant_shared_rooms") || "[]");
+        if (!sharedRooms.some((r) => r.id === newRoom.id)) {
+          sharedRooms.push(newRoom);
+          localStorage.setItem("vigilant_shared_rooms", JSON.stringify(sharedRooms));
+        }
+      } catch (e) {}
+    }
+
     store.setMessages(roomId, []);
     return newRoom;
   }
 
   leaveRoom(roomId: string) {
     const store = useMatrixStore.getState();
+    getBridgeInstance().then(async (bridge) => {
+      if (bridge) {
+        try {
+          await bridge.leave_room(roomId);
+        } catch (e) {
+          console.warn("WASM bridge leave room error:", e);
+        }
+      }
+    });
     store.leaveRoom(roomId);
   }
 
@@ -351,7 +685,8 @@ class MatrixService {
     content: string,
     type: "text" | "image" | "file" = "text",
     fileName?: string,
-    fileUrl?: string
+    fileUrl?: string,
+    fileData?: Uint8Array
   ) {
     const store = useMatrixStore.getState();
     const currentUser = store.currentUser;
@@ -374,114 +709,34 @@ class MatrixService {
 
     store.addMessage(roomId, newMessage);
 
-    // Trigger mock auto-reply simulation
-    this.triggerMockReply(roomId, content);
-  }
-
-  private triggerMockReply(roomId: string, userMessage: string) {
-    const store = useMatrixStore.getState();
-    const room = store.rooms.find((r) => r.id === roomId);
-    if (!room) return;
-
-    // Pick a mock respondent (anyone other than the current user)
-    const activeUserId = store.currentUser?.id;
-    const responders = room.members.filter((m) => m !== activeUserId && m !== "user_synapse");
-
-    if (responders.length === 0) return;
-
-    const randomResponderId = responders[Math.floor(Math.random() * responders.length)];
-    const responder = store.users.find((u) => u.id === randomResponderId) || MOCK_USERS[1];
-
-    // Determine an appropriate reply
-    let replyContent = "Understood. I will check the logs and update you shortly.";
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes("design") || lowerMessage.includes("mockup") || lowerMessage.includes("layout")) {
-      replyContent = "The frontend layouts are ready. I will create a branch and update the dashboard structure.";
-    } else if (lowerMessage.includes("key") || lowerMessage.includes("encrypt") || lowerMessage.includes("olm")) {
-      replyContent = "Remember that Olm keys are verified out-of-band using SAS Emoji strings. Let's schedule a session.";
-    } else if (lowerMessage.includes("hello") || lowerMessage.includes("hey")) {
-      replyContent = `Hey! How's the foundation layout coming along?`;
-    } else if (lowerMessage.includes("deploy") || lowerMessage.includes("docker")) {
-      replyContent = "I'm monitoring the synapse container. The sync token polling latency is under 40ms.";
+    // Save message to shared local storage across sessions
+    if (typeof window !== "undefined") {
+      try {
+        const roomKey = `vigilant_shared_messages_${roomId}`;
+        const existing: Message[] = JSON.parse(localStorage.getItem(roomKey) || "[]");
+        existing.push(newMessage);
+        localStorage.setItem(roomKey, JSON.stringify(existing));
+        window.dispatchEvent(new Event("vigilant_message_sent"));
+      } catch (e) {}
     }
 
-    setTimeout(() => {
-      const mockReply: Message = {
-        id: `msg_${Math.random().toString(36).substring(2, 9)}`,
-        roomId,
-        senderId: responder.id,
-        senderName: responder.name,
-        senderAvatar: responder.avatarUrl,
-        content: replyContent,
-        timestamp: Date.now(),
-        type: "text",
-        isEncrypted: room.isEncrypted,
-      };
-
-      store.addMessage(roomId, mockReply);
-      this.triggerPushNotification(room.name, `${responder.name}: ${replyContent}`);
-    }, 1500 + Math.random() * 1000);
-  }
-
-  private startSimulation() {
-    // Periodically post mock updates to `#general` or checkups in DMs to simulate active work environment
-    this.botMessageTimer = setInterval(() => {
-      const store = useMatrixStore.getState();
-      if (!store.currentUser) return;
-
-      const randomEvent = Math.random();
-      
-      // 30% chance of a simulation message
-      if (randomEvent < 0.35) {
-        const channels = ["room_general", "room_security"];
-        const targetRoomId = channels[Math.floor(Math.random() * channels.length)];
-        const room = store.rooms.find((r) => r.id === targetRoomId);
-        
-        if (!room) return;
-
-        const sender = MOCK_USERS[Math.floor(Math.random() * 2) + 2]; // Alice or Bob
-        
-        const generalQuotes = [
-          "I am checking the MinIO S3 media store connectivity. Works cleanly locally.",
-          "We should implement the custom matrix-sdk wrapper once the WASM build completes.",
-          "I updated the Postgres indices for room history sync speedups.",
-        ];
-
-        const securityQuotes = [
-          "Make sure to test keys backup to the passphrase encrypted storage.",
-          "I am reviewing the client-side session authentication verification design.",
-          "Let's ensure the matrix-sdk-bridge rust bindings compile with wasm-pack.",
-        ];
-
-        const quotes = targetRoomId === "room_general" ? generalQuotes : securityQuotes;
-        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-
-        const simMessage: Message = {
-          id: `msg_${Math.random().toString(36).substring(2, 9)}`,
-          roomId: targetRoomId,
-          senderId: sender.id,
-          senderName: sender.name,
-          senderAvatar: sender.avatarUrl,
-          content: randomQuote,
-          timestamp: Date.now(),
-          type: "text",
-          isEncrypted: room.isEncrypted,
-        };
-
-        store.addMessage(targetRoomId, simMessage);
-        this.triggerPushNotification(`#${room.name}`, `${sender.name}: ${randomQuote}`);
+    // Perform WASM bridge background send if active
+    getBridgeInstance().then(async (bridge) => {
+      if (bridge) {
+        try {
+          if (type === "text") {
+            await bridge.send_message(roomId, content);
+          } else if (type === "image" && fileData && fileName) {
+            const mimeType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
+            await bridge.send_image(roomId, fileData, fileName, mimeType);
+          } else if (type === "file" && fileData && fileName) {
+            await bridge.send_file(roomId, fileData, fileName, "application/pdf");
+          }
+        } catch (e) {
+          console.warn("WASM bridge message send error:", e);
+        }
       }
-    }, 45000); // Trigger every 45s
-  }
-
-  private triggerPushNotification(title: string, body: string) {
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-      new Notification(`Vigilant - ${title}`, {
-        body,
-        icon: "/next.svg",
-      });
-    }
+    });
   }
 }
 

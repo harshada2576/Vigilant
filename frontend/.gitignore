@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# webassembly
+/public/*.wasm
+/public/matrix_sdk_bridge_bg.wasm
+

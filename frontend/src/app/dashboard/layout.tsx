@@ -11,7 +11,8 @@ import {
   Wifi, 
   WifiOff, 
   ChevronRight, 
-  Lock
+  Lock,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMatrixStore, Room, User } from "@/store/matrixStore";
@@ -47,6 +48,9 @@ export default function DashboardLayout({
   const [newRoomIsEncrypted, setNewRoomIsEncrypted] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [showStatusDropdown, setShowStatusDropdown] = React.useState(false);
+  const [startDmModalOpen, setStartDmModalOpen] = React.useState(false);
+  const [targetDmInput, setTargetDmInput] = React.useState("");
+  const [dmError, setDmError] = React.useState("");
 
   // Initialize service
   React.useEffect(() => {
@@ -68,7 +72,7 @@ export default function DashboardLayout({
 
   const handleLogout = () => {
     matrixService.logout();
-    router.push("/");
+    window.location.href = "/";
   };
 
   const handleCreateRoom = (e: React.FormEvent) => {
@@ -93,6 +97,54 @@ export default function DashboardLayout({
     router.push(`/dashboard/c/${newRoom.id}`);
   };
 
+  const handleStartDM = async (e?: React.FormEvent, selectedUser?: string) => {
+    e?.preventDefault();
+    const queryName = (selectedUser || targetDmInput).trim();
+    if (!queryName) return;
+
+    setDmError("");
+    const cleanQuery = queryName.replace("#", "").trim().toLowerCase();
+
+    let targetObj = users.find(
+      (u) =>
+        u.name.toLowerCase() === cleanQuery ||
+        u.email.toLowerCase() === cleanQuery ||
+        u.id.toLowerCase().includes(cleanQuery)
+    );
+
+    let resolvedName = targetObj ? targetObj.name : "";
+
+    if (!resolvedName && typeof window !== "undefined") {
+      try {
+        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+        if (userMap[cleanQuery]) {
+          resolvedName = userMap[cleanQuery];
+        }
+      } catch (err) {}
+    }
+
+    if (!resolvedName) {
+      setDmError(`User "${queryName}" not found. Please select a valid registered user.`);
+      return;
+    }
+
+    try {
+      const dmRoom = await matrixService.createRoom(
+        resolvedName,
+        "dm",
+        "",
+        true
+      );
+      setTargetDmInput("");
+      setDmError("");
+      setStartDmModalOpen(false);
+      setActiveRoomId(dmRoom.id);
+      router.push(`/dashboard/dm/${dmRoom.id}`);
+    } catch (err) {
+      console.error("Failed to start DM:", err);
+    }
+  };
+
   const changeStatus = (status: User["status"]) => {
     if (currentUser) {
       useMatrixStore.getState().updateUserStatus(currentUser.id, status);
@@ -109,24 +161,59 @@ export default function DashboardLayout({
 
   const filteredDMs = rooms.filter((room) => {
     if (room.type !== "dm") return false;
-    if (!room.members.includes(currentUser?.id || "")) return false;
-    const otherMemberId = room.members.find((m) => m !== currentUser?.id);
-    const otherUser = users.find((u) => u.id === otherMemberId);
-    const displayName = otherUser ? otherUser.name : room.name;
-    return displayName.toLowerCase().includes(searchQuery.toLowerCase());
+    const name = getDMDisplayName(room);
+    return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const getDMDisplayName = (room: Room) => {
-    const otherMemberId = room.members.find((m) => m !== currentUser?.id);
-    const otherUser = users.find((u) => u.id === otherMemberId);
-    return otherUser ? otherUser.name : room.name;
-  };
+  function getDMDisplayName(room: Room) {
+    const currentClean = (currentUser?.name || "").toLowerCase();
+    const currentIdClean = (currentUser?.id || "").toLowerCase();
 
-  const getDMDisplayStatus = (room: Room) => {
-    const otherMemberId = room.members.find((m) => m !== currentUser?.id);
-    const otherUser = users.find((u) => u.id === otherMemberId);
-    return otherUser ? otherUser.status : "offline";
-  };
+    const otherMember = room.members.find(
+      (m) => m.toLowerCase() !== currentClean && m.toLowerCase() !== currentIdClean
+    ) || room.name;
+
+    const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
+
+    const matchUser = users.find(
+      (u) =>
+        u.name.toLowerCase() === cleanMember ||
+        u.email.toLowerCase() === cleanMember ||
+        u.id.toLowerCase().includes(cleanMember)
+    );
+    if (matchUser) return matchUser.name;
+
+    if (typeof window !== "undefined") {
+      try {
+        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
+        if (userMap[cleanMember]) return userMap[cleanMember];
+      } catch (e) {}
+    }
+
+    if (cleanMember.length > 0) {
+      return cleanMember.charAt(0).toUpperCase() + cleanMember.slice(1);
+    }
+    return room.name;
+  }
+
+  function getDMDisplayStatus(room: Room) {
+    const currentClean = (currentUser?.name || "").toLowerCase();
+    const currentIdClean = (currentUser?.id || "").toLowerCase();
+
+    const otherMember = room.members.find(
+      (m) => m.toLowerCase() !== currentClean && m.toLowerCase() !== currentIdClean
+    ) || room.name;
+
+    const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
+
+    const matchUser = users.find(
+      (u) =>
+        u.name.toLowerCase() === cleanMember ||
+        u.email.toLowerCase() === cleanMember ||
+        u.id.toLowerCase().includes(cleanMember)
+    );
+    return matchUser ? matchUser.status : "online";
+  }
 
   if (!currentUser && isConnecting) {
     return (
@@ -249,6 +336,13 @@ export default function DashboardLayout({
         <div className="space-y-2">
           <div className="flex items-center justify-between px-2 py-1 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
             <span>Direct Messages</span>
+            <button
+              onClick={() => setStartDmModalOpen(true)}
+              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+              title="Start Direct Message"
+            >
+              <Plus className="size-4" />
+            </button>
           </div>
 
           <div className="space-y-1">
@@ -475,6 +569,85 @@ export default function DashboardLayout({
               onChange={(e) => setNewRoomIsEncrypted(e.target.checked)}
               className="accent-primary size-4.5 cursor-pointer"
             />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Start Direct Message Modal */}
+      <Modal
+        isOpen={startDmModalOpen}
+        onClose={() => {
+          setStartDmModalOpen(false);
+          setDmError("");
+        }}
+        title="Start Direct Message"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setStartDmModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="default" onClick={(e) => handleStartDM(e)}>
+              Open Chat
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleStartDM} className="space-y-4 font-sans">
+          {dmError && (
+            <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-xs font-semibold text-destructive flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{dmError}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground/90">
+              Select or Type Registered Username / Email
+            </label>
+            <Input
+              type="text"
+              placeholder="e.g. Harshada or Rushikesh"
+              value={targetDmInput}
+              onChange={(e) => {
+                setTargetDmInput(e.target.value);
+                setDmError("");
+              }}
+              required
+              className="h-10 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Valid Registered Users Directory
+            </span>
+            <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5 bg-muted/20 custom-scrollbar">
+              {users
+                .filter((u) => u.name.toLowerCase() !== (currentUser?.name || "").toLowerCase())
+                .map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      setTargetDmInput(u.name);
+                      setDmError("");
+                      handleStartDM(undefined, u.name);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted text-left transition-colors font-medium text-sm group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={u.name} status={u.status} size="sm" />
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-foreground">{u.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{u.email}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                      Chat →
+                    </span>
+                  </button>
+                ))}
+            </div>
           </div>
         </form>
       </Modal>

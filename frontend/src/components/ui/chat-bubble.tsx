@@ -34,6 +34,30 @@ export function ChatBubble({
     return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const formatFullTimestamp = (ts: number) => {
+    const date = new Date(ts);
+    const now = new Date();
+    const isToday =
+      date.getDate() === now.getDate() &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday =
+      date.getDate() === yesterday.getDate() &&
+      date.getMonth() === yesterday.getMonth() &&
+      date.getFullYear() === yesterday.getFullYear();
+
+    const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    if (isToday) return `Today at ${timeStr}`;
+    if (isYesterday) return `Yesterday at ${timeStr}`;
+
+    const dateStr = date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    return `${dateStr} at ${timeStr}`;
+  };
+
   const copyToClipboard = () => {
     if (type === "text") {
       navigator.clipboard.writeText(content);
@@ -60,7 +84,9 @@ export function ChatBubble({
         {/* Header (Sender Name & Time) */}
         <div className="flex items-center gap-2.5 mb-1.5">
           <span className="text-sm font-semibold text-foreground/90">{senderName}</span>
-          <span className="text-xs text-muted-foreground">{formatTime(timestamp)}</span>
+          <span className="text-xs text-muted-foreground cursor-help" title={formatFullTimestamp(timestamp)}>
+            {formatTime(timestamp)}
+          </span>
           {isEncrypted && (
             <span title="End-to-End Encrypted via Megolm">
               <ShieldCheck className="size-4 text-primary" />
@@ -106,8 +132,9 @@ export function ChatBubble({
               </div>
               <a
                 href={fileUrl || "#"}
-                download
+                download={fileName || "document.pdf"}
                 className="p-1.5 hover:bg-muted/50 rounded-md text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                title={`Download ${fileName || "document.pdf"}`}
               >
                 <Download className="size-4.5" />
               </a>

@@ -1,50 +1,55 @@
-# Synapse runtime / secrets
-# Node / Next.js build artifacts
+# ==========================================
+# Node.js & Next.js Build Artifacts
+# ==========================================
 node_modules/
+.next/
+out/
+build/
+
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
-.next/
 
-# Environment and local secrets
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+*.pem
 
-# Synapse runtime & secrets
+# ==========================================
+# Matrix / Synapse Runtime & Secrets
+# ==========================================
 synapse/
-synapse/*
 
-# Node / Next.js build artifacts
-node_modules/
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/build/
-.next/
-
-# Environment and local secrets
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Synapse runtime & secrets
-synapse/
-synapse/*
-synapse/*.signing.key
-synapse/media_store/
-synapse/uploads/
-synapse/__pycache__/
-synapse/*.log
-synapse/homeserver.yaml
-
-# Rust build outputs
+# ==========================================
+# Rust Build Outputs
+# ==========================================
 **/target/
+matrix-sdk-bridge/target/
+matrix-sdk-bridge/pkg/
 
-# Temporary files
+# ==========================================
+# WebAssembly (WASM) Binaries
+# ==========================================
+*.wasm
+frontend/public/*.wasm
+frontend/public/matrix_sdk_bridge_bg.wasm
+
+# ==========================================
+# Logs & Debug Files
+# ==========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# OS & IDE Temporary Files
+# ==========================================
+.DS_Store
 temp*
