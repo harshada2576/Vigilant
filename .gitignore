@@ -1,4 +1,41 @@
 # Synapse runtime / secrets
+# Node / Next.js build artifacts
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+.next/
+
+# Environment and local secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Synapse runtime & secrets
+synapse/
+synapse/*
+
+# Node / Next.js build artifacts
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+.next/
+
+# Environment and local secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Synapse runtime & secrets
+synapse/
+synapse/*
 synapse/*.signing.key
 synapse/media_store/
 synapse/uploads/
