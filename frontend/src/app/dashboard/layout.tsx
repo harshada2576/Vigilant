@@ -60,15 +60,20 @@ export default function DashboardLayout({
     };
   }, []);
 
-  // Redirect if not logged in (mock validation)
+  // Redirect if not logged in
   React.useEffect(() => {
+    // Give the service time to restore session before redirecting.
+    // If still no user and not connecting after the timeout, send to login.
     const checkUser = setTimeout(() => {
-      if (!useMatrixStore.getState().currentUser && !isConnecting) {
+      const state = useMatrixStore.getState();
+      if (!state.currentUser && !state.isConnecting) {
         router.push("/login");
       }
-    }, 500);
+    }, 800);
     return () => clearTimeout(checkUser);
-  }, [currentUser, isConnecting, router]);
+  // Re-run whenever auth state changes so we redirect as soon as auth clears
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, isConnecting]);
 
   const handleLogout = () => {
     matrixService.logout();
