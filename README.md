@@ -1,6 +1,6 @@
 # Vigilant
 
-> An experimental secure messaging platform built around the Matrix ecosystem using Rust, WebAssembly, and modern web technologies.
+> An experimental Matrix-based secure messaging platform built around modern web technologies.
 
 Vigilant is an ongoing engineering project exploring how secure messaging systems can be built on top of the Matrix protocol without reinventing the underlying communication stack. Rather than implementing a custom messaging protocol, Vigilant focuses on understanding, extending, and integrating established infrastructure while building a modular, maintainable application.
 
@@ -67,11 +67,10 @@ This project remains under active development and should currently be considered
 
 ```text
 Vigilant/
-├── frontend/              # Next.js application?
-├── matrix-sdk-bridge/     # Rust WebAssembly bridge
-├── synapse/               # Synapse configuration
-├── docker-compose.yml     # Development infrastructure
-├── docs/                  # Project documentation (coming soon?)
+├── frontend/
+├── infrastructure/
+├── docs/
+├── docker-compose.yml
 └── README.md
 ```
 
