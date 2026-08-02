@@ -1,101 +1,176 @@
-# Vigilant 🛡️
-> Sovereign End-to-End Encrypted Messaging Platform for Enterprise Security.
+# Vigilant
 
-Vigilant is a high-performance, private corporate messaging application built on top of the **Matrix Open Standard Protocol**, featuring local **Megolm End-to-End Encryption (E2EE)**, Rust WebAssembly client bindings (`@seucra/matrix-sdk-bridge`), and dedicated PostgreSQL and MinIO homeserver infrastructure.
+> An experimental secure messaging platform built around the Matrix ecosystem using Rust, WebAssembly, and modern web technologies.
 
----
+Vigilant is an ongoing engineering project exploring how secure messaging systems can be built on top of the Matrix protocol without reinventing the underlying communication stack. Rather than implementing a custom messaging protocol, Vigilant focuses on understanding, extending, and integrating established infrastructure while building a modular, maintainable application.
 
-## 🛠️ Technology Stack
-
-- **Frontend**: Next.js 16 (App Router), TypeScript, TailwindCSS v4, Lucide React, Zustand State Management
-- **Matrix Client Binding**: Rust WebAssembly Bridge (`@seucra/matrix-sdk-bridge` with direct bundler resolution)
-- **Backend Homeserver**: Matrix Synapse (`matrixdotorg/synapse:latest`)
-- **Database**: PostgreSQL 16
-- **Media Object Store**: MinIO S3 Compatible Storage
+The project serves both as a long-term learning initiative and as a foundation for future experimentation in backend systems, secure application design, distributed messaging, and systems programming.
 
 ---
 
-## 🚀 Quick Start Guide
+# Why Vigilant?
 
-### Prerequisites
-- Node.js 18+ and `npm`
-- Docker & Docker Compose
+This project began with a simple ambition: build a secure messaging application, similar in spirit to platforms like WhatsApp or Telegram.
 
-### 1. Environment & Backend Infrastructure
+Early iterations attempted to solve too many problems independently. As the project evolved, it became clear that modern messaging platforms involve significantly more than message exchange—covering synchronization, federation, encryption, reliability, storage, and identity.
 
-Create a `.env` file from `.env.example` to define secure local credentials:
+Vigilant therefore shifted toward the Matrix ecosystem, allowing development to focus on application architecture and engineering rather than reimplementing an entire messaging protocol.
 
-```bash
-# Copy sample environment configuration
-cp .env.example .env
+---
 
-# Generate Synapse homeserver configuration
-cp homeserver.yaml.example synapse/homeserver.yaml
+# Current Status
 
-# Start PostgreSQL, MinIO, and Synapse containers
-docker compose up -d
+| Component                     | Status                        |
+| ----------------------------- | ----------------------------- |
+| Backend                       | Backend Cycle 1 Complete      |
+| Frontend                      | Active Development            |
+| Matrix SDK Bridge             | Functional                    |
+| Rust → WebAssembly Bridge     | Published as an npm package   |
+| Matrix Synapse Infrastructure | Operational                   |
+| Documentation                 | In Progress                   |
 
-# Verify Synapse health endpoint
-curl http://localhost:8008/_matrix/client/versions
+This project remains under active development and should currently be considered an engineering prototype rather than a production-ready application.
+
+---
+
+# Architecture Overview
+
+```text
+┌─────────────────────┐
+│     Frontend        │
+│   Next.js + React   │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ matrix-sdk-bridge   │
+│    Rust → WASM      │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│    Matrix SDK       │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Matrix Synapse     │
+└──────┬────────┬─────┘
+       │        │
+       ▼        ▼
+ PostgreSQL   MinIO
 ```
 
-### 2. Start Frontend Application
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start Next.js development server
-npm run dev
-```
-
-Open **[http://localhost:3000](http://localhost:3000)** in your browser.
-
 ---
 
-## ✨ Key Features
+# Repository Structure
 
-### 🔐 Authentication & Session Lifecycle
-- **User Registration & Login**: Corporate sign-up with email uniqueness validation.
-- **Session Export & Restore**: Matrix access token & Megolm key state stored securely in localStorage across browser reloads.
-- **Automatic Fallback Mode**: Local interactive fallback mode when homeserver is offline for uninterrupted testing.
-
-### 💬 Messaging & Timeline Sync
-- **Encrypted Channels & DMs**: Public and Megolm E2E Encrypted channels (`#general`, `#announcements`, `#security-compliance`) and Direct Messages.
-- **Real-Time Cross-Tab Synchronization**: Instant cross-tab messaging updates via Matrix sync stream and storage events.
-- **Date Dividers & Timestamp Tooltips**: Smart timeline date dividers (`Today`, `Yesterday`, formatted calendar dates) and full timestamp hover tooltips.
-
-### 📄 File Sharing & Downloads
-- **Image & PDF Attachments**: Composer attachment preview with instant file attachment and downloading.
-- **Cross-Session Downlinks**: Base64 payload serialization for reliable PDF and image downloading on any receiving browser.
-
----
-
-## 🔒 Security & Secret Management
-
-Internal secrets, private keys, database passwords, and environment credentials must **never** be committed to source control:
-
-- **Git Ignored Resources**: `synapse/*.signing.key`, `synapse/*.log`, `synapse/homeserver.yaml`, `.env*`, and `.wasm` build artifacts are strictly excluded via `.gitignore`.
-- **Environment Variables**: Always store sensitive credentials (e.g., `POSTGRES_PASSWORD`, `SYNAPSE_MACAROON_SECRET_KEY`) in `.env` files or secure secret stores, referencing template variables in configuration files.
-
----
-
-## 📂 Project Structure
-
-```
+```text
 Vigilant/
-├── frontend/                  # Next.js 16 Application
-│   ├── src/
-│   │   ├── app/               # Next.js App Router (login, register, dashboard)
-│   │   ├── components/        # UI components & ChatWindow timeline
-│   │   ├── services/          # matrixService.ts WASM bridge layer
-│   │   └── store/             # Zustand state management
-│   └── package.json           # Linked to local @seucra/matrix-sdk-bridge
-├── synapse/                   # Synapse homeserver configuration
-├── matrix-sdk-bridge/         # Modular Rust WASM SDK source code & pkg output
-├── docker-compose.yml         # Container orchestrator
+├── frontend/              # Next.js application?
+├── matrix-sdk-bridge/     # Rust WebAssembly bridge
+├── synapse/               # Synapse configuration
+├── docker-compose.yml     # Development infrastructure
+├── docs/                  # Project documentation (coming soon?)
 └── README.md
 ```
+
+---
+
+# Technology Stack
+
+| Area           | Technologies                             |
+| -------------- | ---------------------------------------- |
+| Frontend       | Next.js, React, TypeScript, Tailwind CSS |
+| Backend        | Rust, WebAssembly, Matrix SDK            |
+| Messaging      | Matrix Synapse                           |
+| Database       | PostgreSQL                               |
+| Object Storage | MinIO                                    |
+| Infrastructure | Docker, Docker Compose                   |
+
+---
+
+# Team
+
+This project is being developed collaboratively.
+
+**Frontend**
+
+* User interface
+* User experience
+* Client-side application
+* Integration with backend services
+
+**Backend**
+
+* Rust WebAssembly bridge
+* Matrix SDK integration
+* Backend architecture
+* Infrastructure
+
+---
+
+# Design Principles
+
+* Build on established open standards instead of reinventing protocols.
+* Keep components modular and loosely coupled.
+* Prioritize understanding over unnecessary complexity.
+* Learn through implementation and iteration.
+* Document architectural decisions as the project evolves.
+
+---
+
+# Roadmap
+
+### Current
+
+* Improve frontend stability and user experience.
+* Continue backend refinement.
+* Expand project documentation.
+
+### Next
+
+* Complete integration testing.
+* Improve deployment workflow.
+* Expand application features.
+
+### Future
+
+* Continue exploring secure messaging concepts.
+* Improve developer experience.
+* Evaluate long-term deployment and scalability options.
+
+---
+
+# Documentation
+
+Detailed documentation will gradually move into the `docs/` directory.
+
+Planned documentation includes:
+
+```text
+docs/
+├── architecture.md
+├── backend.md
+├── frontend.md
+├── api.md
+├── deployment.md
+├── decisions.md
+├── roadmap.md
+└── contributing.md
+```
+
+---
+
+# Contributing
+
+The project is currently under active development and is not yet ready for external contributions.
+
+Once the architecture stabilizes, contribution guidelines and development documentation will be published.
+
+---
+
+# License
+
+A project license will be added once the project reaches a stable public milestone.
+
