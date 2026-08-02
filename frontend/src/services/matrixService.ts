@@ -13,8 +13,9 @@
  */
 
 import { useMatrixStore, User, Room, Message } from "../store/matrixStore";
+import type { MatrixBridge } from "@seucra/matrix-sdk-bridge";
 
-let bridgeInstance: any = null;
+let bridgeInstance: MatrixBridge | null = null;
 
 // Default workspace channels (no mock users, no mock messages — Synapse is authoritative)
 const DEFAULT_CHANNELS: Room[] = [
@@ -58,35 +59,28 @@ function isValidEmail(email: string): boolean {
 }
 
 /**
- * Resolve the homeserver URL.
- * Uses NEXT_PUBLIC_HOMESERVER_URL env var if set, otherwise defaults to http://localhost:8008.
+ * Lazy-loads and initialises the WASM bridge singleton.
+ *
+ * Matches the Vigilant Matrix SDK Bridge integration guide §2 exactly:
+ *   - Throws on SSR (window === undefined).
+ *   - Throws on any WASM / homeserver init failure.
+ * Callers should wrap in try/catch so local-fallback logic can activate.
  */
-function resolveHomeserverUrl(): string {
-  return process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
-}
-
-/**
- * Lazy-loads and initializes the WASM bridge (singleton).
- * WASM binary must exist at /matrix_sdk_bridge_bg.wasm (public/).
- * The postinstall script in package.json copies it there automatically.
- */
-async function getBridgeInstance(): Promise<any | null> {
-  if (typeof window === "undefined") return null;
+async function getBridgeInstance(): Promise<MatrixBridge> {
+  if (typeof window === "undefined") {
+    throw new Error("Matrix WASM bridge can only run in the browser.");
+  }
   if (bridgeInstance) return bridgeInstance;
 
-  try {
-    const wasm = await import("@seucra/matrix-sdk-bridge");
-    // Load static WASM from public/ (copied by postinstall script)
-    await wasm.default({ module_or_path: "/matrix_sdk_bridge_bg.wasm" });
-
-    const homeserverUrl = resolveHomeserverUrl();
-    console.log("[MatrixBridge] Initializing → targeting homeserver:", homeserverUrl);
-    bridgeInstance = await wasm.MatrixBridge.init(homeserverUrl);
-    return bridgeInstance;
-  } catch (error) {
-    console.warn("[MatrixBridge] WASM bridge unavailable, using local fallback mode:", error);
-    return null;
-  }
+  // 1. Dynamically import the generated JS module
+  const wasm = await import("@seucra/matrix-sdk-bridge");
+  // 2. Load the WASM binary from /public (copied there by the postinstall script)
+  await wasm.default("/matrix_sdk_bridge_bg.wasm");
+  // 3. Connect to Synapse
+  const homeserverUrl = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
+  console.log("[MatrixBridge] Initializing → targeting homeserver:", homeserverUrl);
+  bridgeInstance = await wasm.MatrixBridge.init(homeserverUrl);
+  return bridgeInstance;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,12 +116,12 @@ class MatrixService {
       // Start cross-tab user list sync (picks up newly registered users in other tabs)
       this.startCrossTabSync(store);
 
-      const bridge = await getBridgeInstance();
       // ✅ matrix_session is also tab-scoped
       const savedSession = sessionStorage.getItem("matrix_session");
 
-      if (bridge && savedSession) {
+      if (savedSession) {
         try {
+          const bridge = await getBridgeInstance();
           console.log("[MatrixBridge] Restoring session…");
           await bridge.restore_session(savedSession);
           // Register callbacks before sync (per API lifecycle doc)
@@ -501,34 +495,38 @@ class MatrixService {
     // Attempt Synapse login via WASM bridge
     try {
       const bridge = await getBridgeInstance();
-      if (bridge) {
-        console.log(`[MatrixBridge] login() → username: ${username}`);
-        await bridge.login(username, password);
+      console.log(`[MatrixBridge] login() → username: ${username}`);
+      await bridge.login(username, password);
 
-        const session = bridge.export_session();
-        // ✅ Tab-scoped: sessionStorage so other tabs keep their own sessions
-        if (session) sessionStorage.setItem("matrix_session", session);
+      const session = bridge.export_session();
+      // ✅ Tab-scoped: sessionStorage so other tabs keep their own sessions
+      if (session) sessionStorage.setItem("matrix_session", session);
 
-        const displayName = this.resolveDisplayName(email, username);
-        const user: User = {
-          id: `@${username}:${this.matrixDomain()}`,
-          name: displayName,
-          email,
-          status: "online",
-        };
+      const displayName = this.resolveDisplayName(email, username);
+      const user: User = {
+        id: `@${username}:${this.matrixDomain()}`,
+        name: displayName,
+        email,
+        status: "online",
+      };
 
-        // ✅ Tab-scoped: sessionStorage keeps this user only in this tab
-        sessionStorage.setItem("vigilant_user", JSON.stringify(user));
-        store.setCurrentUser(user);
+      // ✅ Tab-scoped: sessionStorage keeps this user only in this tab
+      sessionStorage.setItem("vigilant_user", JSON.stringify(user));
+      store.setCurrentUser(user);
 
-        this.startCrossTabSync(store);
-        this.registerCallbacks(bridge, store);
+      this.startCrossTabSync(store);
+      this.registerCallbacks(bridge, store);
+      try {
         bridge.start_sync();
-        await this.fetchRoomsFromBridge(bridge, store);
-        store.setSynced(true);
-        store.setConnecting(false);
-        return user;
+      } catch (e) {
+        // "Sync is already running" — harmless if sync was already started
+        // (e.g. a restored session tab that also triggers login)
+        console.warn("[MatrixBridge] start_sync skipped (already running):", e);
       }
+      await this.fetchRoomsFromBridge(bridge, store);
+      store.setSynced(true);
+      store.setConnecting(false);
+      return user;
     } catch (error: any) {
       console.warn("[MatrixBridge] login() failed:", error?.message || error);
       if (
@@ -583,34 +581,37 @@ class MatrixService {
 
     try {
       const bridge = await getBridgeInstance();
-      if (bridge) {
-        console.log(`[MatrixBridge] register() → username: ${username}`);
-        await bridge.register(username, password);
+      console.log(`[MatrixBridge] register() → username: ${username}`);
+      await bridge.register(username, password);
 
-        const session = bridge.export_session();
-        // ✅ Tab-scoped
-        if (session) sessionStorage.setItem("matrix_session", session);
+      const session = bridge.export_session();
+      // ✅ Tab-scoped
+      if (session) sessionStorage.setItem("matrix_session", session);
 
-        const user: User = {
-          id: `@${username}:${this.matrixDomain()}`,
-          name: displayName,
-          email: cleanEmail,
-          status: "online",
-        };
+      const user: User = {
+        id: `@${username}:${this.matrixDomain()}`,
+        name: displayName,
+        email: cleanEmail,
+        status: "online",
+      };
 
-        this.persistUserRegistration(user);
-        // ✅ Tab-scoped
-        sessionStorage.setItem("vigilant_user", JSON.stringify(user));
-        store.setCurrentUser(user);
+      this.persistUserRegistration(user);
+      // ✅ Tab-scoped
+      sessionStorage.setItem("vigilant_user", JSON.stringify(user));
+      store.setCurrentUser(user);
 
-        this.startCrossTabSync(store);
-        this.registerCallbacks(bridge, store);
+      this.startCrossTabSync(store);
+      this.registerCallbacks(bridge, store);
+      try {
         bridge.start_sync();
-        await this.fetchRoomsFromBridge(bridge, store);
-        store.setSynced(true);
-        store.setConnecting(false);
-        return user;
+      } catch (e) {
+        // "Sync is already running" — harmless, suppress silently
+        console.warn("[MatrixBridge] start_sync skipped (already running):", e);
       }
+      await this.fetchRoomsFromBridge(bridge, store);
+      store.setSynced(true);
+      store.setConnecting(false);
+      return user;
     } catch (error: any) {
       if (
         error?.message?.includes("already exists") ||
@@ -646,10 +647,8 @@ class MatrixService {
     const store = useMatrixStore.getState();
     try {
       const bridge = await getBridgeInstance();
-      if (bridge) {
-        bridge.stop_sync();
-        await bridge.logout();
-      }
+      bridge.stop_sync();
+      await bridge.logout();
     } catch (err) {
       console.warn("[MatrixBridge] logout error:", err);
     } finally {
@@ -721,10 +720,8 @@ class MatrixService {
       // Try bridge room creation
       try {
         const bridge = await getBridgeInstance();
-        if (bridge) {
-          const dmId = await bridge.get_or_create_direct_message(targetId);
-          if (dmId) roomId = dmId;
-        }
+        const dmId = await bridge.get_or_create_direct_message(targetId);
+        if (dmId) roomId = dmId;
       } catch (e) {
         console.warn("[MatrixBridge] createRoom bridge call skipped:", e);
       }
@@ -764,11 +761,9 @@ class MatrixService {
     let roomId = `room_${Math.random().toString(36).slice(2, 9)}`;
     try {
       const bridge = await getBridgeInstance();
-      if (bridge) {
-        const rId = await bridge.create_room(cleanInput);
-        if (rId) roomId = rId;
-        await bridge.join_room(roomId);
-      }
+      const rId = await bridge.create_room(cleanInput);
+      if (rId) roomId = rId;
+      await bridge.join_room(roomId);
     } catch (e) {
       console.warn("[MatrixBridge] createRoom bridge call skipped:", e);
     }
@@ -804,15 +799,15 @@ class MatrixService {
 
   leaveRoom(roomId: string) {
     const store = useMatrixStore.getState();
-    getBridgeInstance().then(async (bridge) => {
-      if (bridge) {
+    getBridgeInstance()
+      .then(async (bridge) => {
         try {
           await bridge.leave_room(roomId);
         } catch (e) {
           console.warn("[MatrixBridge] leaveRoom error:", e);
         }
-      }
-    });
+      })
+      .catch((e) => console.warn("[MatrixBridge] leaveRoom bridge unavailable:", e));
     store.leaveRoom(roomId);
   }
 
@@ -826,7 +821,8 @@ class MatrixService {
     type: "text" | "image" | "file" = "text",
     fileName?: string,
     fileUrl?: string,
-    fileData?: Uint8Array
+    fileData?: Uint8Array,
+    mimeType?: string
   ) {
     const store = useMatrixStore.getState();
     const currentUser = store.currentUser;
@@ -857,25 +853,30 @@ class MatrixService {
       window.dispatchEvent(new Event("vigilant_message_sent"));
     } catch (e) {}
 
-    // Send via WASM bridge (background)
-    getBridgeInstance().then(async (bridge) => {
-      if (!bridge) return;
-      try {
-        // Matrix room IDs must start with '!' sigil for the Matrix Rust SDK
-        if (!roomId.startsWith("!")) return;
+    // Send via WASM bridge (background — message is already saved to localStorage above)
+    getBridgeInstance()
+      .then(async (bridge) => {
+        try {
+          // Matrix room IDs must start with '!' sigil for the Matrix Rust SDK
+          if (!roomId.startsWith("!")) return;
 
-        if (type === "text") {
-          await bridge.send_message(roomId, content);
-        } else if (type === "image" && fileData && fileName) {
-          const mime = fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
-          await bridge.send_image(roomId, fileData, fileName, mime);
-        } else if (type === "file" && fileData && fileName) {
-          await bridge.send_file(roomId, fileData, fileName, "application/pdf");
+          if (type === "text") {
+            await bridge.send_message(roomId, content);
+          } else if (type === "image" && fileData && fileName) {
+            // Use the browser-supplied MIME type (file.type) — falls back to
+            // extension guessing only if the caller didn't thread it through.
+            const mime = mimeType || (fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+            await bridge.send_image(roomId, fileData, fileName, mime);
+          } else if (type === "file" && fileData && fileName) {
+            await bridge.send_file(roomId, fileData, fileName, "application/pdf");
+          }
+        } catch (e) {
+          console.warn("[MatrixBridge] sendMessage bridge error:", e);
         }
-      } catch (e) {
-        console.warn("[MatrixBridge] sendMessage bridge error:", e);
-      }
-    });
+      })
+      .catch(() => {
+        // WASM bridge unavailable — message already persisted to localStorage
+      });
   }
 
   // ---------------------------------------------------------------------------
@@ -884,9 +885,8 @@ class MatrixService {
 
   async getRoomHistory(roomId: string, limit = 50) {
     const store = useMatrixStore.getState();
-    const bridge = await getBridgeInstance();
-    if (!bridge) return;
     try {
+      const bridge = await getBridgeInstance();
       const raw = await bridge.get_room_history(roomId, limit);
       const history = JSON.parse(raw);
       const messages: Message[] = (history.messages || []).map((m: any) => ({
@@ -903,6 +903,63 @@ class MatrixService {
       if (messages.length > 0) store.setMessages(roomId, messages);
     } catch (err) {
       console.warn(`[MatrixBridge] getRoomHistory(${roomId}) failed:`, err);
+    }
+  }
+
+  /**
+   * load_more_history() — Paginates older events for a room timeline.
+   *
+   * Per API contract: get_room_history() MUST be called first to initialize
+   * the timeline. Calling this before that will error with "Timeline not initialized".
+   *
+   * Returns new-only messages (bridge deduplicates by event ID).
+   * The caller should prepend them to the top of the conversation UI.
+   *
+   * Cycle 1 note: may return empty array with has_more=true on the first call.
+   */
+  async loadMoreHistory(roomId: string, limit = 50): Promise<{ messages: Message[]; has_more: boolean }> {
+    try {
+      const bridge = await getBridgeInstance();
+      const raw = await bridge.load_more_history(roomId, limit);
+      const history = JSON.parse(raw);
+      const messages: Message[] = (history.messages || []).map((m: any) => ({
+        id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
+        roomId: m.room_id,
+        senderId: m.sender,
+        senderName: m.sender.split(":")[0].replace("@", ""),
+        content: m.body,
+        timestamp: m.timestamp,
+        type: m.message_type as "text" | "image" | "file",
+        isEncrypted: Boolean(m.message_uri || m.mime_type),
+        fileName: m.message_type !== "text" ? m.body : undefined,
+      }));
+      return { messages, has_more: Boolean(history.has_more) };
+    } catch (err) {
+      console.warn(`[MatrixBridge] loadMoreHistory(${roomId}) failed:`, err);
+      return { messages: [], has_more: false };
+    }
+  }
+
+  /**
+   * get_media() — Retrieve media bytes from an image or file message.
+   *
+   * `mediaSourceJson` must come directly from the `media_source` field
+   * of a JsMessage. Treat it as opaque bridge data — do not construct it manually.
+   *
+   * Usage:
+   *   const bytes = await matrixService.getMedia(message.media_source);
+   *   const blob = new Blob([bytes], { type: message.mime_type });
+   *   const url = URL.createObjectURL(blob);
+   *   // imageElement.src = url;  OR  anchor.href = url; anchor.click();
+   *   // Cleanup: URL.revokeObjectURL(url);
+   */
+  async getMedia(mediaSourceJson: string): Promise<Uint8Array | null> {
+    try {
+      const bridge = await getBridgeInstance();
+      return await bridge.get_media(mediaSourceJson);
+    } catch (err) {
+      console.warn("[MatrixBridge] getMedia() failed:", err);
+      return null;
     }
   }
 

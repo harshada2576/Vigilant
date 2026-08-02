@@ -31,6 +31,13 @@ impl MatrixBridge{
                 event: AnySyncTimelineEvent,
                 room: Room,
             | async move {
+                // Suppress notifications that arrive during the initial sync
+                // pass. Once initial_sync_complete is true, all subsequent
+                // events are genuinely new messages.
+                if !initial_sync_complete.get() {
+                    return;
+                }
+
                 let AnySyncTimelineEvent::MessageLike(
                     AnySyncMessageLikeEvent::RoomMessage(message_event)
                 ) = event else {
@@ -67,9 +74,5 @@ impl MatrixBridge{
                 }
             },
         );
-
-        if !initial_sync_complete.get() {
-           return;
-        }
     }
 }

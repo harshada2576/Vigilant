@@ -71,6 +71,7 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
     name: string;
     isImage: boolean;
     fileUrl: string;
+    mimeType: string;
   } | null>(null);
   
   // Refs
@@ -137,7 +138,8 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
         pendingFile.isImage ? "image" : "file",
         pendingFile.name,
         pendingFile.fileUrl,
-        fileData
+        fileData,
+        pendingFile.mimeType
       );
       setPendingFile(null);
       setText("");
@@ -170,7 +172,8 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
         file,
         name: file.name,
         isImage,
-        fileUrl
+        fileUrl,
+        mimeType: file.type,
       });
     };
     reader.readAsDataURL(file);
