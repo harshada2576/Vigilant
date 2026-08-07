@@ -27,13 +27,6 @@ frontend/build/
 synapse/
 
 # ==========================================
-# Rust Build Outputs
-# ==========================================
-**/target/
-matrix-sdk-bridge/target/
-matrix-sdk-bridge/pkg/
-
-# ==========================================
 # WebAssembly (WASM) Binaries
 # ==========================================
 *.wasm
