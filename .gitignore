@@ -10,6 +10,7 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
+frontend/package-lock.json
 
 # ==========================================
 # Environment Variables & Secrets
@@ -25,6 +26,7 @@ frontend/build/
 # Matrix / Synapse Runtime & Secrets
 # ==========================================
 synapse/
+matrix-sdk-bridge/
 
 # ==========================================
 # WebAssembly (WASM) Binaries
