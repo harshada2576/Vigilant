@@ -65,12 +65,25 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ### 💬 Messaging & Timeline Sync
 - **Encrypted Channels & DMs**: Public and Megolm E2E Encrypted channels (`#general`, `#announcements`, `#security-compliance`) and Direct Messages.
+- **Dynamic 20-Message Initial Loading**: Optimized memory footprint by loading the most recent 20 messages on room mount.
+- **Scroll-Up Infinite History Pagination**: Smoothly fetches earlier messages in 20-event batches when scrolling to top, maintaining exact scroll position without layout shifts or jumping.
 - **Real-Time Cross-Tab Synchronization**: Instant cross-tab messaging updates via Matrix sync stream and storage events.
-- **Date Dividers & Timestamp Tooltips**: Smart timeline date dividers (`Today`, `Yesterday`, formatted calendar dates) and full timestamp hover tooltips.
+- **Date Dividers & Visual Empty States**: Smart timeline date dividers (`Today`, `Yesterday`, formatted calendar dates) and rich onboarding cards for empty rooms.
+
+### 👥 User Directory & Live Presence
+- **Matrix Homeserver Directory Search**: Debounced live search querying Synapse (`POST /_matrix/client/v3/user_directory/search`) allowing discovery of any registered teammate on the network.
+- **Live Bidirectional Presence (`m.presence`)**: Synchronizes user status (`online`, `busy`/Do Not Disturb, `away`, `offline`) via Matrix presence endpoints (`PUT/GET /_matrix/client/v3/presence/{userId}/status`) and cross-tab broadcasts.
+- **DM Header Status Badges**: Real-time status dot and label in direct conversation headers.
 
 ### 📄 File Sharing & Downloads
 - **Image & PDF Attachments**: Composer attachment preview with instant file attachment and downloading.
-- **Cross-Session Downlinks**: Base64 payload serialization for reliable PDF and image downloading on any receiving browser.
+- **On-Demand Remote Media Decryption**: Fetches encrypted MXC bytes via WASM bridge `get_media()`, creating local object URLs for secure inline viewing and saving.
+- **Storage Quota Resilience**: Intelligent localStorage eviction and payload protection preventing browser quota crashes.
+
+### 🛡️ Connection Architecture Transparency
+- **Live Synapse Sync Indicator**: Real-time pulsing badge in the sidebar header reflecting true Matrix Rust WASM connection status.
+- **Interactive Simulation Mode**: Explicit status pill and architecture modal when Synapse is offline, maintaining local testing capability without misleading connection claims.
+- **Safety Safeguards**: Confirmation modals for sign-out and password visibility toggles on login/registration forms.
 
 ---
 
@@ -91,11 +104,12 @@ Vigilant/
 │   ├── src/
 │   │   ├── app/               # Next.js App Router (login, register, dashboard)
 │   │   ├── components/        # UI components & ChatWindow timeline
-│   │   ├── services/          # matrixService.ts WASM bridge layer
-│   │   └── store/             # Zustand state management
+│   │   ├── services/          # matrixService.ts WASM bridge & homeserver API layer
+│   │   └── store/             # Zustand state management (presence, rooms, messages)
 │   └── package.json           # Linked to local @seucra/matrix-sdk-bridge
 ├── synapse/                   # Synapse homeserver configuration
 ├── matrix-sdk-bridge/         # Modular Rust WASM SDK source code & pkg output
 ├── docker-compose.yml         # Container orchestrator
 └── README.md
 ```
+

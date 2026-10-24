@@ -1,7 +1,8 @@
 import * as React from "react";
-import { ShieldCheck, FileText, Download, Copy, Check } from "lucide-react";
+import { ShieldCheck, FileText, Download, Copy, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar } from "./avatar";
+import { matrixService } from "@/services/matrixService";
 
 interface ChatBubbleProps {
   senderName: string;
@@ -13,6 +14,8 @@ interface ChatBubbleProps {
   type?: "text" | "image" | "file";
   fileName?: string;
   fileUrl?: string;
+  mediaSource?: string;
+  mimeType?: string;
   className?: string;
 }
 
@@ -26,9 +29,46 @@ export function ChatBubble({
   type = "text",
   fileName,
   fileUrl,
+  mediaSource,
+  mimeType,
   className,
 }: ChatBubbleProps) {
   const [copied, setCopied] = React.useState(false);
+  const [resolvedUrl, setResolvedUrl] = React.useState<string | undefined>(fileUrl);
+  const [loadingMedia, setLoadingMedia] = React.useState(false);
+
+  React.useEffect(() => {
+    if (fileUrl) {
+      setResolvedUrl(fileUrl);
+      return;
+    }
+
+    if (mediaSource && !resolvedUrl) {
+      let isMounted = true;
+      setLoadingMedia(true);
+      matrixService.getMedia(mediaSource).then((bytes) => {
+        if (!isMounted || !bytes) {
+          setLoadingMedia(false);
+          return;
+        }
+        try {
+          const blob = new Blob([bytes as any], {
+            type: mimeType || (type === "image" ? "image/jpeg" : "application/pdf"),
+          });
+          const url = URL.createObjectURL(blob);
+          setResolvedUrl(url);
+        } catch (e) {
+          console.warn("Failed to create blob from media bytes:", e);
+        } finally {
+          setLoadingMedia(false);
+        }
+      });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [fileUrl, mediaSource, mimeType, type]);
 
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -108,32 +148,48 @@ export function ChatBubble({
           {type === "image" && (
             <div className="flex flex-col gap-2.5">
               {content && <p className="mb-1">{content}</p>}
-              <div className="overflow-hidden rounded-lg border border-border bg-black/20 max-w-xs sm:max-w-md max-h-64 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                  src={fileUrl} 
-                  alt={fileName || "Image"} 
-                  className="w-full object-contain max-h-60 transition-transform duration-200 hover:scale-[1.01]" 
-                />
+              <div className="overflow-hidden rounded-lg border border-border bg-black/20 max-w-xs sm:max-w-md min-h-[140px] max-h-72 flex items-center justify-center p-1">
+                {loadingMedia ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-8">
+                    <Loader2 className="size-4 animate-spin text-primary" />
+                    <span>Decrypting media...</span>
+                  </div>
+                ) : resolvedUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img 
+                    src={resolvedUrl} 
+                    alt={fileName || "Image"} 
+                    className="w-full object-contain max-h-68 rounded transition-transform duration-200 hover:scale-[1.01]" 
+                  />
+                ) : (
+                  <div className="text-xs text-muted-foreground py-6">Image attachment unavailable</div>
+                )}
               </div>
             </div>
           )}
 
           {type === "file" && (
             <div className="flex items-center gap-3 bg-background/40 dark:bg-background/25 rounded-lg p-3 border border-border/80 min-w-[220px]">
-              <div className="p-2 bg-primary/10 rounded-md text-primary">
-                <FileText className="size-5.5" />
+              <div className="p-2 bg-primary/10 rounded-md text-primary shrink-0">
+                {loadingMedia ? <Loader2 className="size-5 animate-spin" /> : <FileText className="size-5.5" />}
               </div>
               <div className="flex flex-col min-w-[110px] flex-1 max-w-[240px]">
                 <span className="text-sm font-medium truncate text-foreground" title={fileName}>
-                  {fileName}
+                  {fileName || "Document.pdf"}
                 </span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">PDF Document</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                  {loadingMedia ? "Decrypting..." : "PDF Document"}
+                </span>
               </div>
               <a
-                href={fileUrl || "#"}
+                href={resolvedUrl || "#"}
                 download={fileName || "document.pdf"}
-                className="p-1.5 hover:bg-muted/50 rounded-md text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  "p-1.5 hover:bg-muted/50 rounded-md text-muted-foreground hover:text-foreground transition-colors shrink-0",
+                  (!resolvedUrl || loadingMedia) && "pointer-events-none opacity-40"
+                )}
                 title={`Download ${fileName || "document.pdf"}`}
               >
                 <Download className="size-4.5" />

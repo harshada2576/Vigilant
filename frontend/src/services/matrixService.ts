@@ -128,16 +128,21 @@ class MatrixService {
           this.registerCallbacks(bridge, store);
           bridge.start_sync();
           await this.fetchRoomsFromBridge(bridge, store);
+          store.setConnectionMode("wasm");
         } catch (e) {
           console.warn("[MatrixBridge] Session restore failed, using local state:", e);
           // Clear corrupted session
           sessionStorage.removeItem("matrix_session");
+          store.setConnectionMode("local");
         }
+      } else {
+        store.setConnectionMode("local");
       }
 
       store.setSynced(true);
     } catch (error) {
       console.error("[MatrixService] init error:", error);
+      store.setConnectionMode("local");
     } finally {
       store.setConnecting(false);
     }
@@ -186,10 +191,34 @@ class MatrixService {
           this.syncRoomMessages(roomId);
         }
       }
+
+      // Live Presence sync from peer tabs
+      if (event.key?.startsWith("vigilant_user_presence_") && event.newValue) {
+        const target = event.key.replace("vigilant_user_presence_", "");
+        const status = event.newValue as User["status"];
+        if (status) {
+          useMatrixStore.getState().updateUserStatus(target, status);
+        }
+      }
+    };
+
+    const handleLocalPresence = () => {
+      // Re-hydrate presence for visible users
+      const liveStore = useMatrixStore.getState();
+      liveStore.users.forEach((u) => {
+        const p = this.getCachedUserPresence(u.id) || this.getCachedUserPresence(u.email);
+        if (p && p !== u.status) {
+          liveStore.updateUserStatus(u.id, p);
+        }
+      });
     };
 
     window.addEventListener("storage", handler);
-    this.crossTabSyncCleanup = () => window.removeEventListener("storage", handler);
+    window.addEventListener("vigilant_presence_change", handleLocalPresence);
+    this.crossTabSyncCleanup = () => {
+      window.removeEventListener("storage", handler);
+      window.removeEventListener("vigilant_presence_change", handleLocalPresence);
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -247,13 +276,19 @@ class MatrixService {
 
     store.setRooms(visibleRooms);
 
-    // Messages: load from localStorage for each visible room
+    // Messages: load initial 20 messages from localStorage for each visible room
     visibleRooms.forEach((r) => {
       const saved = localStorage.getItem(`vigilant_shared_messages_${r.id}`);
       if (saved) {
         try {
-          store.setMessages(r.id, JSON.parse(saved));
+          const allMsgs: Message[] = JSON.parse(saved);
+          const initialSlice = allMsgs.slice(-20);
+          store.setMessages(r.id, initialSlice);
+          store.setHasMoreMessages(r.id, allMsgs.length > 20);
         } catch (e) {}
+      } else {
+        store.setMessages(r.id, []);
+        store.setHasMoreMessages(r.id, false);
       }
     });
   }
@@ -524,6 +559,7 @@ class MatrixService {
         console.warn("[MatrixBridge] start_sync skipped (already running):", e);
       }
       await this.fetchRoomsFromBridge(bridge, store);
+      store.setConnectionMode("wasm");
       store.setSynced(true);
       store.setConnecting(false);
       return user;
@@ -550,6 +586,7 @@ class MatrixService {
     // ✅ Tab-scoped
     sessionStorage.setItem("vigilant_user", JSON.stringify(found));
     store.setCurrentUser(found);
+    store.setConnectionMode("local");
     this.startCrossTabSync(store);
     this.hydrateLocalData(store);
     store.setSynced(true);
@@ -609,6 +646,7 @@ class MatrixService {
         console.warn("[MatrixBridge] start_sync skipped (already running):", e);
       }
       await this.fetchRoomsFromBridge(bridge, store);
+      store.setConnectionMode("wasm");
       store.setSynced(true);
       store.setConnecting(false);
       return user;
@@ -636,6 +674,7 @@ class MatrixService {
     // ✅ Tab-scoped
     sessionStorage.setItem("vigilant_user", JSON.stringify(user));
     store.setCurrentUser(user);
+    store.setConnectionMode("local");
     this.startCrossTabSync(store);
     this.hydrateLocalData(store);
     store.setSynced(true);
@@ -844,14 +883,27 @@ class MatrixService {
 
     store.addMessage(roomId, msg);
 
-    // Persist for cross-tab sync
+    // Persist for cross-tab sync with quota resilience
     try {
       const key = `vigilant_shared_messages_${roomId}`;
       const existing: Message[] = JSON.parse(localStorage.getItem(key) || "[]");
       existing.push(msg);
-      localStorage.setItem(key, JSON.stringify(existing));
+      // Keep up to 250 messages per room in localStorage to prevent 5MB storage exhaustion
+      const trimmed = existing.slice(-250);
+      localStorage.setItem(key, JSON.stringify(trimmed));
       window.dispatchEvent(new Event("vigilant_message_sent"));
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Storage quota limit reached, saving trimmed payload:", e);
+      try {
+        const key = `vigilant_shared_messages_${roomId}`;
+        // Strip out large data URLs in emergency fallback
+        const leanMsg = { ...msg, fileUrl: undefined };
+        const existing: Message[] = JSON.parse(localStorage.getItem(key) || "[]");
+        existing.push(leanMsg);
+        localStorage.setItem(key, JSON.stringify(existing.slice(-50)));
+        window.dispatchEvent(new Event("vigilant_message_sent"));
+      } catch {}
+    }
 
     // Send via WASM bridge (background — message is already saved to localStorage above)
     getBridgeInstance()
@@ -880,64 +932,123 @@ class MatrixService {
   }
 
   // ---------------------------------------------------------------------------
-  // Room history (WASM bridge)
+  // Room history (WASM bridge + Local Fallback Pagination)
   // ---------------------------------------------------------------------------
 
-  async getRoomHistory(roomId: string, limit = 50) {
+  async getRoomHistory(roomId: string, limit = 20) {
     const store = useMatrixStore.getState();
     try {
       const bridge = await getBridgeInstance();
-      const raw = await bridge.get_room_history(roomId, limit);
-      const history = JSON.parse(raw);
-      const messages: Message[] = (history.messages || []).map((m: any) => ({
-        id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
-        roomId: m.room_id,
-        senderId: m.sender,
-        senderName: m.sender.split(":")[0].replace("@", ""),
-        content: m.body,
-        timestamp: m.timestamp,
-        type: m.message_type as "text" | "image" | "file",
-        isEncrypted: Boolean(m.message_uri || m.mime_type),
-        fileName: m.message_type !== "text" ? m.body : undefined,
-      }));
-      if (messages.length > 0) store.setMessages(roomId, messages);
+      if (bridge && roomId.startsWith("!")) {
+        const raw = await bridge.get_room_history(roomId, limit);
+        const history = JSON.parse(raw);
+        const messages: Message[] = (history.messages || []).map((m: any) => ({
+          id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
+          roomId: m.room_id,
+          senderId: m.sender,
+          senderName: m.sender.split(":")[0].replace("@", ""),
+          content: m.body,
+          timestamp: m.timestamp,
+          type: m.message_type as "text" | "image" | "file",
+          isEncrypted: Boolean(m.message_uri || m.mime_type),
+          fileName: m.message_type !== "text" ? m.body : undefined,
+          fileUrl: m.message_uri || undefined,
+          mediaSource: m.media_source,
+          mimeType: m.mime_type,
+        }));
+        if (messages.length > 0) {
+          store.setMessages(roomId, messages);
+          store.setHasMoreMessages(roomId, messages.length >= limit);
+          return;
+        }
+      }
     } catch (err) {
-      console.warn(`[MatrixBridge] getRoomHistory(${roomId}) failed:`, err);
+      console.warn(`[MatrixBridge] getRoomHistory(${roomId}) bridge failed, checking local:`, err);
+    }
+
+    // Local fallback: load only initial slice of up to `limit` messages
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`vigilant_shared_messages_${roomId}`);
+        if (saved) {
+          const all: Message[] = JSON.parse(saved);
+          const initialSlice = all.slice(-limit);
+          store.setMessages(roomId, initialSlice);
+          store.setHasMoreMessages(roomId, all.length > limit);
+        } else {
+          store.setMessages(roomId, []);
+          store.setHasMoreMessages(roomId, false);
+        }
+      } catch (e) {}
     }
   }
 
   /**
-   * load_more_history() — Paginates older events for a room timeline.
-   *
-   * Per API contract: get_room_history() MUST be called first to initialize
-   * the timeline. Calling this before that will error with "Timeline not initialized".
-   *
-   * Returns new-only messages (bridge deduplicates by event ID).
-   * The caller should prepend them to the top of the conversation UI.
-   *
-   * Cycle 1 note: may return empty array with has_more=true on the first call.
+   * loadMoreHistory() — Paginates older events for a room timeline.
+   * Loads `limit` earlier messages and prepends them smoothly.
    */
-  async loadMoreHistory(roomId: string, limit = 50): Promise<{ messages: Message[]; has_more: boolean }> {
+  async loadMoreHistory(roomId: string, limit = 20): Promise<{ messages: Message[]; has_more: boolean }> {
+    const store = useMatrixStore.getState();
     try {
       const bridge = await getBridgeInstance();
-      const raw = await bridge.load_more_history(roomId, limit);
-      const history = JSON.parse(raw);
-      const messages: Message[] = (history.messages || []).map((m: any) => ({
-        id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
-        roomId: m.room_id,
-        senderId: m.sender,
-        senderName: m.sender.split(":")[0].replace("@", ""),
-        content: m.body,
-        timestamp: m.timestamp,
-        type: m.message_type as "text" | "image" | "file",
-        isEncrypted: Boolean(m.message_uri || m.mime_type),
-        fileName: m.message_type !== "text" ? m.body : undefined,
-      }));
-      return { messages, has_more: Boolean(history.has_more) };
+      if (bridge && roomId.startsWith("!")) {
+        const raw = await bridge.load_more_history(roomId, limit);
+        const history = JSON.parse(raw);
+        const messages: Message[] = (history.messages || []).map((m: any) => ({
+          id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
+          roomId: m.room_id,
+          senderId: m.sender,
+          senderName: m.sender.split(":")[0].replace("@", ""),
+          content: m.body,
+          timestamp: m.timestamp,
+          type: m.message_type as "text" | "image" | "file",
+          isEncrypted: Boolean(m.message_uri || m.mime_type),
+          fileName: m.message_type !== "text" ? m.body : undefined,
+          fileUrl: m.message_uri || undefined,
+          mediaSource: m.media_source,
+          mimeType: m.mime_type,
+        }));
+
+        if (messages.length > 0) {
+          store.prependMessages(roomId, messages);
+        }
+        const hasMore = Boolean(history.has_more);
+        store.setHasMoreMessages(roomId, hasMore);
+        return { messages, has_more: hasMore };
+      }
     } catch (err) {
-      console.warn(`[MatrixBridge] loadMoreHistory(${roomId}) failed:`, err);
-      return { messages: [], has_more: false };
+      console.warn(`[MatrixBridge] loadMoreHistory(${roomId}) bridge failed, falling back to local:`, err);
     }
+
+    // Local fallback pagination
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`vigilant_shared_messages_${roomId}`);
+        if (!saved) {
+          store.setHasMoreMessages(roomId, false);
+          return { messages: [], has_more: false };
+        }
+        const all: Message[] = JSON.parse(saved);
+        const currentMessages = store.messages[roomId] || [];
+
+        const earliestTimestamp = currentMessages.length > 0 ? currentMessages[0].timestamp : Infinity;
+        const olderCandidates = all.filter((m) => m.timestamp < earliestTimestamp);
+
+        const olderSlice = olderCandidates.slice(-limit);
+        const hasMore = olderCandidates.length > olderSlice.length;
+
+        if (olderSlice.length > 0) {
+          store.prependMessages(roomId, olderSlice);
+        }
+        store.setHasMoreMessages(roomId, hasMore);
+        return { messages: olderSlice, has_more: hasMore };
+      } catch (e) {
+        console.warn("[MatrixService] local loadMoreHistory error:", e);
+      }
+    }
+
+    store.setHasMoreMessages(roomId, false);
+    return { messages: [], has_more: false };
   }
 
   /**
@@ -960,6 +1071,201 @@ class MatrixService {
     } catch (err) {
       console.warn("[MatrixBridge] getMedia() failed:", err);
       return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // P0: Homeserver User Directory Search
+  // ---------------------------------------------------------------------------
+
+  async searchUsers(query: string, limit = 20): Promise<User[]> {
+    const trimmed = query.trim();
+    const resultsMap = new Map<string, User>();
+    const sessionData = this.getSessionData();
+    const homeserver = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
+
+    // 1. If we have an active session access token, search the Matrix Homeserver User Directory
+    if (sessionData.accessToken && trimmed) {
+      try {
+        const response = await fetch(`${homeserver}/_matrix/client/v3/user_directory/search`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.accessToken}`,
+          },
+          body: JSON.stringify({
+            search_term: trimmed,
+            limit,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data.results)) {
+            for (const item of data.results) {
+              const uId: string = item.user_id;
+              const cleanUId = uId.toLowerCase();
+              const name = item.display_name || uId.split(":")[0].replace("@", "");
+              resultsMap.set(cleanUId, {
+                id: uId,
+                name: name,
+                email: `${name.toLowerCase()}@${this.matrixDomain()}`,
+                avatarUrl: item.avatar_url,
+                status: "offline",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[MatrixService] Homeserver user directory search error:", err);
+      }
+    }
+
+    // 2. Search locally registered users
+    const registered = this.loadRegisteredUsers();
+    for (const u of registered) {
+      const match =
+        !trimmed ||
+        u.name.toLowerCase().includes(trimmed.toLowerCase()) ||
+        u.email.toLowerCase().includes(trimmed.toLowerCase()) ||
+        u.id.toLowerCase().includes(trimmed.toLowerCase());
+      if (match && !resultsMap.has(u.id.toLowerCase())) {
+        resultsMap.set(u.id.toLowerCase(), { ...u });
+      }
+    }
+
+    // 3. Search users currently in store
+    const store = useMatrixStore.getState();
+    for (const u of store.users) {
+      const match =
+        !trimmed ||
+        u.name.toLowerCase().includes(trimmed.toLowerCase()) ||
+        u.email.toLowerCase().includes(trimmed.toLowerCase()) ||
+        u.id.toLowerCase().includes(trimmed.toLowerCase());
+      if (match && !resultsMap.has(u.id.toLowerCase())) {
+        resultsMap.set(u.id.toLowerCase(), { ...u });
+      }
+    }
+
+    // Hydrate latest presence states
+    const results = Array.from(resultsMap.values());
+    for (const u of results) {
+      const presence = this.getCachedUserPresence(u.id) || this.getCachedUserPresence(u.email);
+      if (presence) {
+        u.status = presence;
+      }
+    }
+
+    return results;
+  }
+
+  // ---------------------------------------------------------------------------
+  // P1: Live Matrix Presence Synchronization
+  // ---------------------------------------------------------------------------
+
+  async setUserPresence(status: "online" | "busy" | "away" | "offline"): Promise<void> {
+    const store = useMatrixStore.getState();
+    const currentUser = store.currentUser;
+    if (!currentUser) return;
+
+    // 1. Immediately update in local state
+    store.updateUserStatus(currentUser.id, status);
+
+    // 2. Broadcast across tabs via storage & window events
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`vigilant_user_presence_${currentUser.id.toLowerCase()}`, status);
+        localStorage.setItem(`vigilant_user_presence_${currentUser.email.toLowerCase()}`, status);
+        const username = currentUser.email.split("@")[0].toLowerCase();
+        localStorage.setItem(`vigilant_user_presence_${username}`, status);
+        window.dispatchEvent(new Event("vigilant_presence_change"));
+      } catch (e) {}
+    }
+
+    // 3. Send presence state to Matrix homeserver if authenticated
+    const sessionData = this.getSessionData();
+    const homeserver = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
+    const targetUserId = sessionData.userId || currentUser.id;
+
+    if (sessionData.accessToken && targetUserId) {
+      try {
+        const matrixPresence = status === "away" || status === "busy" ? "unavailable" : status;
+        const statusMsg = status === "busy" ? "Do Not Disturb" : status === "away" ? "Away" : "";
+
+        await fetch(`${homeserver}/_matrix/client/v3/presence/${encodeURIComponent(targetUserId)}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.accessToken}`,
+          },
+          body: JSON.stringify({
+            presence: matrixPresence,
+            status_msg: statusMsg,
+          }),
+        });
+      } catch (err) {
+        console.warn("[MatrixService] Homeserver presence update error:", err);
+      }
+    }
+  }
+
+  async getUserPresence(userId: string): Promise<"online" | "busy" | "away" | "offline"> {
+    const cached = this.getCachedUserPresence(userId);
+    if (cached) return cached;
+
+    const sessionData = this.getSessionData();
+    const homeserver = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
+
+    if (sessionData.accessToken && userId.startsWith("@")) {
+      try {
+        const response = await fetch(
+          `${homeserver}/_matrix/client/v3/presence/${encodeURIComponent(userId)}/status`,
+          {
+            headers: {
+              Authorization: `Bearer ${sessionData.accessToken}`,
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const p = data.presence;
+          const statusMsg = data.status_msg || "";
+          let mapped: "online" | "busy" | "away" | "offline" = "offline";
+          if (p === "online") mapped = "online";
+          else if (p === "unavailable") mapped = statusMsg.toLowerCase().includes("busy") ? "busy" : "away";
+          else mapped = "offline";
+
+          useMatrixStore.getState().updateUserStatus(userId, mapped);
+          return mapped;
+        }
+      } catch {}
+    }
+
+    return "offline";
+  }
+
+  getCachedUserPresence(userId: string): "online" | "busy" | "away" | "offline" | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const val = localStorage.getItem(`vigilant_user_presence_${userId.toLowerCase()}`);
+      if (val === "online" || val === "busy" || val === "away" || val === "offline") {
+        return val;
+      }
+    } catch {}
+    return null;
+  }
+
+  private getSessionData(): { accessToken?: string; userId?: string } {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = sessionStorage.getItem("matrix_session");
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      const accessToken = parsed?.tokens?.access_token || parsed?.access_token;
+      const userId = parsed?.meta?.user_id || parsed?.user_id;
+      return { accessToken, userId };
+    } catch {
+      return {};
     }
   }
 

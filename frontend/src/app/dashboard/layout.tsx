@@ -12,7 +12,9 @@ import {
   WifiOff, 
   ChevronRight, 
   Lock,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMatrixStore, Room, User } from "@/store/matrixStore";
@@ -37,6 +39,7 @@ export default function DashboardLayout({
   const users = useMatrixStore((state) => state.users);
   const isConnecting = useMatrixStore((state) => state.isConnecting);
   const isSynced = useMatrixStore((state) => state.isSynced);
+  const connectionMode = useMatrixStore((state) => state.connectionMode);
   const activeRoomId = useMatrixStore((state) => state.activeRoomId);
   const setActiveRoomId = useMatrixStore((state) => state.setActiveRoomId);
 
@@ -51,31 +54,66 @@ export default function DashboardLayout({
   const [startDmModalOpen, setStartDmModalOpen] = React.useState(false);
   const [targetDmInput, setTargetDmInput] = React.useState("");
   const [dmError, setDmError] = React.useState("");
+  const [searchResults, setSearchResults] = React.useState<User[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
+  const [showSyncInfoModal, setShowSyncInfoModal] = React.useState(false);
+  const [authChecked, setAuthChecked] = React.useState(false);
+
+  // Debounced homeserver user directory search
+  React.useEffect(() => {
+    if (!startDmModalOpen) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await matrixService.searchUsers(targetDmInput);
+        setSearchResults(
+          results.filter(
+            (u) =>
+              u.id.toLowerCase() !== currentUser?.id?.toLowerCase() &&
+              u.email.toLowerCase() !== currentUser?.email?.toLowerCase() &&
+              u.name.toLowerCase() !== currentUser?.name?.toLowerCase()
+          )
+        );
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [targetDmInput, startDmModalOpen, currentUser]);
 
   // Initialize service
   React.useEffect(() => {
     matrixService.init();
-    return () => {
-      matrixService.destroy();
-    };
   }, []);
 
-  // Redirect if not logged in
+  // Check auth and redirect smoothly
   React.useEffect(() => {
-    // Give the service time to restore session before redirecting.
-    // If still no user and not connecting after the timeout, send to login.
-    const checkUser = setTimeout(() => {
+    if (currentUser) {
+      setAuthChecked(true);
+      return;
+    }
+    const timer = setTimeout(() => {
       const state = useMatrixStore.getState();
-      if (!state.currentUser && !state.isConnecting) {
+      const sessionUser = typeof window !== "undefined" ? sessionStorage.getItem("vigilant_user") : null;
+      if (!state.currentUser && !sessionUser && !state.isConnecting) {
         router.push("/login");
+      } else {
+        setAuthChecked(true);
       }
-    }, 800);
-    return () => clearTimeout(checkUser);
-  // Re-run whenever auth state changes so we redirect as soon as auth clears
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, isConnecting]);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [currentUser, isConnecting, router]);
 
   const handleLogout = () => {
+    setShowLogoutConfirm(false);
     matrixService.logout();
     window.location.href = "/";
   };
@@ -139,8 +177,8 @@ export default function DashboardLayout({
   };
 
   const changeStatus = (status: User["status"]) => {
-    if (currentUser) {
-      useMatrixStore.getState().updateUserStatus(currentUser.id, status);
+    if (currentUser && status) {
+      matrixService.setUserPresence(status);
     }
     setShowStatusDropdown(false);
   };
@@ -302,21 +340,26 @@ export default function DashboardLayout({
         </div>
 
         {/* Server Sync status badge */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background border border-border">
-          {isSynced ? (
-            <>
-              <Wifi className="size-3.5 text-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">
-                Synced
-              </span>
-            </>
+        <div className="flex items-center">
+          {connectionMode === "wasm" ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Live Synapse</span>
+            </div>
+          ) : connectionMode === "connecting" ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+              <Loader2 className="size-3 animate-spin text-amber-400" />
+              <span>Connecting</span>
+            </div>
           ) : (
-            <>
-              <WifiOff className="size-3.5 text-amber-500 animate-spin" />
-              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wide">
-                Connecting
-              </span>
-            </>
+            <button
+              onClick={() => setShowSyncInfoModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/25 text-primary hover:bg-primary/20 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              title="Click for Connection Details"
+            >
+              <span className="size-2 rounded-full bg-primary" />
+              <span>Simulation Mode</span>
+            </button>
           )}
         </div>
       </div>
@@ -472,7 +515,7 @@ export default function DashboardLayout({
 
           <div className="flex items-center gap-0.5">
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutConfirm(true)}
               className="p-2 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
               title="Sign Out"
             >
@@ -509,6 +552,22 @@ export default function DashboardLayout({
       </div>
     </div>
   );
+
+  if (!authChecked && !currentUser) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-11 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center animate-pulse">
+            <Lock className="size-5.5" />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin text-primary" />
+            <span>Restoring secure session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
@@ -672,45 +731,112 @@ export default function DashboardLayout({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Valid Registered Users Directory
-            </span>
-            <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5 bg-muted/20 custom-scrollbar">
-              {users.filter((u) => u.name.toLowerCase() !== (currentUser?.name || "").toLowerCase()).length === 0 ? (
-                <div className="p-3 text-center text-xs text-muted-foreground">
-                  No other registered users found yet. Team members who sign up will appear here automatically.
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Directory Results (Homeserver & Local)
+              </span>
+              {isSearching && (
+                <div className="flex items-center gap-1.5 text-xs text-primary animate-pulse font-medium">
+                  <Loader2 className="size-3 animate-spin" />
+                  <span>Searching...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="max-h-48 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5 bg-muted/20 custom-scrollbar">
+              {searchResults.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted-foreground">
+                  {isSearching ? (
+                    "Querying Matrix homeserver user directory..."
+                  ) : targetDmInput.trim() ? (
+                    `No users found matching "${targetDmInput}". Enter an exact Matrix ID like @username:domain to start a chat directly.`
+                  ) : (
+                    "Type a name, username, or Matrix ID above to search all accounts."
+                  )}
                 </div>
               ) : (
-                users
-                  .filter((u) => u.name.toLowerCase() !== (currentUser?.name || "").toLowerCase())
-                  .map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => {
-                        setTargetDmInput(u.email);
-                        setDmError("");
-                        handleStartDM(undefined, u.email);
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted text-left transition-colors font-medium text-sm group"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Avatar name={u.name} status={u.status} size="sm" />
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">{u.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{u.email}</span>
-                        </div>
+                searchResults.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      setTargetDmInput(u.id);
+                      setDmError("");
+                      handleStartDM(undefined, u.id);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted text-left transition-colors font-medium text-sm group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={u.name} status={u.status} size="sm" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-foreground truncate">{u.name}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{u.id}</span>
                       </div>
-                      <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                        Chat →
-                      </span>
-                    </button>
-                  ))
+                    </div>
+                    <span className="text-xs text-primary font-semibold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Chat →
+                    </span>
+                  </button>
+                ))
               )}
             </div>
           </div>
         </form>
+      </Modal>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        title="Sign Out"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowLogoutConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleLogout}>
+              Sign Out
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Are you sure you want to sign out of Vigilant on this device? Your local session will be securely cleared.
+        </p>
+      </Modal>
+
+      {/* Connection Architecture Info Modal */}
+      <Modal
+        isOpen={showSyncInfoModal}
+        onClose={() => setShowSyncInfoModal(false)}
+        title="Connection Architecture Status"
+        footer={
+          <Button variant="default" onClick={() => setShowSyncInfoModal(false)}>
+            Understood
+          </Button>
+        }
+      >
+        <div className="space-y-4 text-sm text-muted-foreground font-sans">
+          <div className="p-3 rounded-lg border border-primary/25 bg-primary/10 text-foreground flex items-start gap-2.5">
+            <Info className="size-5 text-primary shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-semibold text-xs uppercase tracking-wide text-primary">Simulation Fallback Active</span>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                The application is running in local high-fidelity simulation mode with cross-tab event synchronization. All messages, channels, and simulated encryption work seamlessly across browser tabs.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-bold text-foreground text-xs uppercase tracking-wider">To connect to a live Matrix Synapse Homeserver:</h4>
+            <pre className="p-3 rounded-lg bg-black/40 border border-border text-xs text-foreground font-mono overflow-x-auto">
+              docker compose up -d
+            </pre>
+            <p className="text-xs">
+              When the Synapse server responds on port 8008, the Rust WebAssembly client automatically transitions to <strong className="text-emerald-400">Live Synapse</strong> mode.
+            </p>
+          </div>
+        </div>
       </Modal>
     </div>
   );

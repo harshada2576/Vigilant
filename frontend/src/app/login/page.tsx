@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, ArrowRight, ShieldAlert, Key } from "lucide-react";
+import { Lock, ArrowRight, ShieldAlert, Key, Eye, EyeOff } from "lucide-react";
 import { matrixService } from "@/services/matrixService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ export default function LoginPage() {
   
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -34,7 +35,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-center items-center px-4 py-16 bg-background text-foreground min-h-screen relative overflow-hidden">
+    <div className="flex-1 flex flex-col justify-center items-center px-4 py-16 bg-background text-foreground min-h-screen relative overflow-hidden font-sans">
       {/* Decorative Orbs */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 size-96 rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
 
@@ -70,7 +71,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5 font-sans">
           <div className="space-y-2">
-            <label className="text-base font-semibold text-foreground/90">
+            <label className="text-sm font-semibold text-foreground/90">
               Email Address
             </label>
             <Input
@@ -86,19 +87,29 @@ export default function LoginPage() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-base font-semibold text-foreground/90">
+              <label className="text-sm font-semibold text-foreground/90">
                 Password
               </label>
             </div>
-            <Input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-              className="h-11 text-base bg-muted/20"
-            />
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+                className="h-11 text-base bg-muted/20 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
 
           <Button
