@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, ArrowRight, ShieldAlert } from "lucide-react";
+import { Lock, ArrowRight, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import { matrixService } from "@/services/matrixService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,24 @@ export default function RegisterPage() {
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim()) return;
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match. Please verify both fields.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
 
     setError("");
     setLoading(true);
@@ -33,7 +45,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-center items-center px-4 py-16 bg-background text-foreground min-h-screen relative overflow-hidden">
+    <div className="flex-1 flex flex-col justify-center items-center px-4 py-16 bg-background text-foreground min-h-screen relative overflow-hidden font-sans">
       {/* Decorative Orbs */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 size-96 rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
 
@@ -55,6 +67,9 @@ export default function RegisterPage() {
           <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
             Register Device Key
           </h2>
+          <p className="text-sm text-muted-foreground/80">
+            Join your sovereign corporate workspace
+          </p>
         </div>
 
         {error && (
@@ -64,49 +79,74 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5 font-sans">
-          <div className="space-y-2">
-            <label className="text-base font-semibold text-foreground/90">
+        <form onSubmit={handleSubmit} className="space-y-4 font-sans">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground/90">
               Full Name
             </label>
             <Input
               type="text"
-              placeholder="Enter your full name"
+              placeholder="e.g. Sarah Connor"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               disabled={loading}
-              className="h-11 text-base bg-muted/20"
+              className="h-10 text-base bg-muted/20"
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-base font-semibold text-foreground/90">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground/90">
               Corporate Email Address
             </label>
             <Input
               type="email"
-              placeholder="Enter your corporate email"
+              placeholder="name@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
-              className="h-11 text-base bg-muted/20"
+              className="h-10 text-base bg-muted/20"
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-base font-semibold text-foreground/90">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground/90">
               Password
             </label>
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Choose a strong password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+                className="h-10 text-base bg-muted/20 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground/90">
+              Confirm Password
+            </label>
             <Input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              type={showPassword ? "text" : "password"}
+              placeholder="Re-enter your password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               required
               disabled={loading}
-              className="h-11 text-base bg-muted/20"
+              className="h-10 text-base bg-muted/20"
             />
           </div>
 

@@ -31,6 +31,8 @@ export interface Message {
   type: "text" | "image" | "file";
   fileUrl?: string;
   fileName?: string;
+  mediaSource?: string;
+  mimeType?: string;
   isEncrypted: boolean;
 }
 
@@ -38,10 +40,12 @@ interface MatrixState {
   currentUser: User | null;
   rooms: Room[];
   messages: Record<string, Message[]>; // roomId -> messages
+  hasMoreMessages: Record<string, boolean>; // roomId -> boolean
   activeRoomId: string | null;
   users: User[]; // User directory for search/DMs
   isConnecting: boolean;
   isSynced: boolean;
+  connectionMode: "wasm" | "local" | "connecting";
   
   // Actions
   setCurrentUser: (user: User | null) => void;
@@ -50,11 +54,14 @@ interface MatrixState {
   leaveRoom: (roomId: string) => void;
   setActiveRoomId: (roomId: string | null) => void;
   addMessage: (roomId: string, message: Message) => void;
+  prependMessages: (roomId: string, messages: Message[]) => void;
   setMessages: (roomId: string, messages: Message[]) => void;
+  setHasMoreMessages: (roomId: string, hasMore: boolean) => void;
   setUsers: (users: User[]) => void;
   updateUserStatus: (userId: string, status: User["status"]) => void;
   setConnecting: (isConnecting: boolean) => void;
   setSynced: (isSynced: boolean) => void;
+  setConnectionMode: (mode: "wasm" | "local" | "connecting") => void;
   reset: () => void;
 }
 
@@ -62,10 +69,12 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   currentUser: null,
   rooms: [],
   messages: {},
+  hasMoreMessages: {},
   activeRoomId: null,
   users: [],
   isConnecting: false,
   isSynced: false,
+  connectionMode: "connecting",
 
   setCurrentUser: (user) => set({ currentUser: user }),
   setRooms: (rooms) => set(() => {
@@ -127,8 +136,18 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   }),
   addMessage: (roomId, message) => set((state) => {
     const roomMessages = state.messages[roomId] || [];
-    // Prevent duplicate messages by ID
-    if (roomMessages.some((m) => m.id === message.id)) return {};
+    // Prevent duplicate messages by ID or timestamp+sender+content fingerprint
+    if (
+      roomMessages.some(
+        (m) =>
+          m.id === message.id ||
+          (m.timestamp === message.timestamp &&
+            m.senderId === message.senderId &&
+            m.content === message.content)
+      )
+    ) {
+      return {};
+    }
     
     const updatedMessages = [...roomMessages, message];
     
@@ -148,10 +167,35 @@ export const useMatrixStore = create<MatrixState>((set) => ({
       rooms: updatedRooms,
     };
   }),
+  prependMessages: (roomId, newOlderMessages) => set((state) => {
+    const current = state.messages[roomId] || [];
+    const currentIds = new Set(current.map((m) => m.id));
+    const currentKeys = new Set(current.map((m) => `${m.senderId}|${m.timestamp}|${m.content}`));
+
+    const filteredOlder = newOlderMessages.filter(
+      (m) => !currentIds.has(m.id) && !currentKeys.has(`${m.senderId}|${m.timestamp}|${m.content}`)
+    );
+
+    if (filteredOlder.length === 0) return {};
+
+    const merged = [...filteredOlder, ...current].sort((a, b) => a.timestamp - b.timestamp);
+    return {
+      messages: {
+        ...state.messages,
+        [roomId]: merged,
+      },
+    };
+  }),
   setMessages: (roomId, messages) => set((state) => ({
     messages: {
       ...state.messages,
       [roomId]: messages,
+    },
+  })),
+  setHasMoreMessages: (roomId, hasMore) => set((state) => ({
+    hasMoreMessages: {
+      ...state.hasMoreMessages,
+      [roomId]: hasMore,
     },
   })),
   setUsers: (users) => set({ users }),
@@ -168,13 +212,16 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   }),
   setConnecting: (isConnecting) => set({ isConnecting }),
   setSynced: (isSynced) => set({ isSynced }),
+  setConnectionMode: (connectionMode) => set({ connectionMode }),
   reset: () => set({
     currentUser: null,
     rooms: [],
     messages: {},
+    hasMoreMessages: {},
     activeRoomId: null,
     users: [],
     isConnecting: false,
     isSynced: false,
+    connectionMode: "connecting",
   }),
 }));

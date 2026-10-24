@@ -12,7 +12,8 @@ import {
   X,
   FileText
 } from "lucide-react";
-import { useMatrixStore } from "@/store/matrixStore";
+import { cn } from "@/lib/utils";
+import { useMatrixStore, User } from "@/store/matrixStore";
 import { matrixService } from "@/services/matrixService";
 import { ChatBubble } from "@/components/ui/chat-bubble";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,7 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
   // States
   const [text, setText] = React.useState("");
   const [isUploading, setIsUploading] = React.useState(false);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [pendingFile, setPendingFile] = React.useState<{
     file: File;
     name: string;
@@ -76,20 +78,54 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
   
   // Refs
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const lastMessageIdRef = React.useRef<string | null>(null);
 
   // Find active room metadata
   const room = rooms.find((r) => r.id === roomId);
   const messages = allMessages[roomId] || [];
+  const hasMore = useMatrixStore((state) => state.hasMoreMessages[roomId] ?? true);
 
-  // Scroll to bottom on new messages
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Fetch initial 20 messages whenever room changes
+  React.useEffect(() => {
+    lastMessageIdRef.current = null;
+    matrixService.getRoomHistory(roomId, 20);
+  }, [roomId]);
+
+  // Handle scroll-up to load older messages (20 at a time)
+  const handleScroll = async () => {
+    const container = scrollContainerRef.current;
+    if (!container || isLoadingMore || !hasMore) return;
+
+    if (container.scrollTop < 60) {
+      setIsLoadingMore(true);
+      const prevScrollHeight = container.scrollHeight;
+      const prevScrollTop = container.scrollTop;
+
+      await matrixService.loadMoreHistory(roomId, 20);
+
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          const newScrollHeight = scrollContainerRef.current.scrollHeight;
+          const deltaHeight = newScrollHeight - prevScrollHeight;
+          scrollContainerRef.current.scrollTop = prevScrollTop + deltaHeight;
+        }
+        setIsLoadingMore(false);
+      });
+    }
   };
 
+  // Auto-scroll to bottom only when a new message is appended or room is loaded
   React.useEffect(() => {
-    scrollToBottom();
-  }, [messages, isUploading, pendingFile]);
+    const currentLastMessage = messages[messages.length - 1];
+    const currentLastId = currentLastMessage ? currentLastMessage.id : null;
+
+    if (currentLastId !== lastMessageIdRef.current) {
+      lastMessageIdRef.current = currentLastId;
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   // Sync messages on storage event (cross-tab) or custom event (same tab)
   React.useEffect(() => {
@@ -253,6 +289,38 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
     return room.name;
   };
 
+  const getDMStatus = (): User["status"] => {
+    if (room.type !== "dm") return "online";
+    const currentClean = (currentUser?.name || "").toLowerCase();
+    const currentIdClean = (currentUser?.id || "").toLowerCase();
+    const currentEmailClean = (currentUser?.email || "").toLowerCase();
+
+    const otherMember = room.members.find(
+      (m) =>
+        m.toLowerCase() !== currentClean &&
+        m.toLowerCase() !== currentIdClean &&
+        m.toLowerCase() !== currentEmailClean
+    ) || room.name;
+
+    const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
+    const cached = matrixService.getCachedUserPresence(cleanMember);
+    if (cached) return cached;
+
+    const matchUser = users.find((u) => {
+      const uId = u.id.toLowerCase();
+      const uEmail = u.email.toLowerCase();
+      const uUsername = u.email.split("@")[0].toLowerCase();
+      return (
+        uId === cleanMember ||
+        uEmail === cleanMember ||
+        cleanMember === uUsername ||
+        cleanMember.startsWith(`@${uUsername}:`)
+      );
+    });
+
+    return matchUser?.status || "offline";
+  };
+
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full bg-background select-none font-sans relative">
       {/* Header bar */}
@@ -275,11 +343,24 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
                 </span>
               )}
             </span>
-            {room.topic && (
+            {room.type === "dm" ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                <span
+                  className={cn(
+                    "size-2 rounded-full",
+                    getDMStatus() === "online" && "bg-emerald-500",
+                    getDMStatus() === "busy" && "bg-rose-500",
+                    getDMStatus() === "away" && "bg-amber-500",
+                    getDMStatus() === "offline" && "bg-zinc-500"
+                  )}
+                />
+                <span className="capitalize">{getDMStatus()}</span>
+              </div>
+            ) : room.topic ? (
               <span className="text-xs text-muted-foreground truncate max-w-md">
                 {room.topic}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -293,16 +374,53 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
       </header>
 
       {/* Message List Panel */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-2 custom-scrollbar bg-card/5">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto py-4 px-3 space-y-2 custom-scrollbar bg-card/5"
+      >
+        {/* Pagination loader at top */}
+        {isLoadingMore && (
+          <div className="flex items-center justify-center py-2 text-xs text-muted-foreground gap-2 animate-pulse">
+            <Loader2 className="size-4 animate-spin text-primary" />
+            <span>Loading earlier messages...</span>
+          </div>
+        )}
+
+        {/* Start of conversation indicator when no older history exists */}
+        {!hasMore && messages.length > 0 && (
+          <div className="flex items-center justify-center my-6 py-1 select-none">
+            <div className="h-px bg-border/40 flex-1 max-w-[120px]" />
+            <span className="mx-3 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
+              Beginning of message history
+            </span>
+            <div className="h-px bg-border/40 flex-1 max-w-[120px]" />
+          </div>
+        )}
+
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6">
-            <div className="size-11 rounded-full bg-primary/5 text-primary/40 border border-primary/10 flex items-center justify-center mb-3">
-              <Hash className="size-6" />
+          <div className="h-full flex flex-col items-center justify-center text-center p-8 select-none">
+            <div className="size-16 rounded-2xl bg-gradient-to-tr from-primary/20 to-primary/5 text-primary border border-primary/20 flex items-center justify-center mb-4 shadow-lg shadow-primary/5">
+              {room.type === "channel" ? (
+                <Hash className="size-8" />
+              ) : (
+                <Lock className="size-8" />
+              )}
             </div>
-            <h4 className="text-sm font-bold text-foreground font-heading">No messages yet</h4>
-            <p className="text-xs text-muted-foreground max-w-xs mt-0.5">
-              This is the beginning of the {room.type === "channel" ? `#${room.name} channel` : `direct conversation`}.
+            <h3 className="text-xl font-bold text-foreground font-heading mb-1.5">
+              {room.type === "channel" ? `#${room.name}` : getRoomDisplayName()}
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mb-4 leading-relaxed">
+              {room.topic || (room.type === "channel"
+                ? `Welcome to the start of #${room.name}. Share messages, updates, and files with your team.`
+                : `This is the beginning of your private conversation with ${getRoomDisplayName()}.`)}
             </p>
+            {room.isEncrypted && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
+                <ShieldCheck className="size-3.5" />
+                End-to-End Encrypted via Megolm
+              </div>
+            )}
           </div>
         ) : (
           messages.map((msg, index) => {
@@ -331,6 +449,8 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
                   type={msg.type}
                   fileName={msg.fileName}
                   fileUrl={msg.fileUrl}
+                  mediaSource={msg.mediaSource}
+                  mimeType={msg.mimeType}
                 />
               </React.Fragment>
             );
