@@ -10,7 +10,14 @@
     "matrix_sdk_bridge.d.ts"
   ],
   "main": "matrix_sdk_bridge.js",
+  "module": "matrix_sdk_bridge.js",
   "types": "matrix_sdk_bridge.d.ts",
+  "exports": {
+    ".": {
+      "import": "./matrix_sdk_bridge.js",
+      "types": "./matrix_sdk_bridge.d.ts"
+    }
+  },
   "sideEffects": [
     "./snippets/*"
   ]

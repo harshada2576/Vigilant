@@ -1,44 +1,72 @@
-# Node / Next.js build artifacts
+# Dependencies
 node_modules/
 frontend/node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Next.js and frontend build outputs
 frontend/.next/
 frontend/out/
 frontend/build/
 .next/
+out/
+build/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
 
-# Environment and local secrets
+# Testing and coverage
+coverage/
+frontend/coverage/
+
+# Environment configurations and local secrets
 .env
+.env*.local
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+frontend/.env
+frontend/.env*.local
+frontend/.env.local
 
-# Synapse runtime & secrets
-synapse/
-synapse/*
+# WebAssembly binaries
+*.wasm
+frontend/public/*.wasm
+frontend/public/matrix_sdk_bridge_bg.wasm
+
+# Rust build artifacts
+**/target/
+matrix-sdk-bridge/target/
+
+# Synapse runtime data and generated keys
+synapse/homeserver.yaml
 synapse/*.signing.key
+synapse/*.log
 synapse/media_store/
 synapse/uploads/
 synapse/__pycache__/
-synapse/*.log
-synapse/homeserver.yaml
-
-# Rust build outputs
-**/target/
-matrix-sdk-bridge/target/
-matrix-sdk-bridge/pkg/
 
 # OS and IDE temporary files
 .DS_Store
+Thumbs.db
 *.pem
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-temp*
-
-synapse/
-frontend/public/*.wasm
-frontend/public/matrix_sdk_bridge_bg.wasm
-*.wasm
-
+.pnpm-debug.log*
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+temp/
+tmp/

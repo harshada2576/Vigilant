@@ -7,11 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test",
     "postinstall": "node -e \"const fs=require('fs');const src='node_modules/@seucra/matrix-sdk-bridge/matrix_sdk_bridge_bg.wasm';const dest='public/matrix_sdk_bridge_bg.wasm';if(fs.existsSync(src)){fs.copyFileSync(src,dest);console.log('WASM copied to public/');}else{console.warn('WASM source not found:',src);}\""
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
-    "@seucra/matrix-sdk-bridge": "file:../matrix-sdk-bridge/pkg",
+    "@seucra/matrix-sdk-bridge": "^0.1.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.25.0",

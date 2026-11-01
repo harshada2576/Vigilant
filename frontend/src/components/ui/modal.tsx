@@ -13,19 +13,20 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children, footer, className }: ModalProps) {
-  const [mounted, setMounted] = React.useState(false);
+  const mounted = React.useSyncExternalStore(
+    React.useCallback(() => () => {}, []),
+    () => true,
+    () => false
+  );
 
   React.useEffect(() => {
-    setMounted(true);
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    if (!mounted || !isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = previousOverflow;
     };
-  }, [isOpen]);
+  }, [isOpen, mounted]);
 
   if (!mounted || !isOpen) return null;
 

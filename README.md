@@ -8,7 +8,7 @@ Vigilant is a high-performance, private corporate messaging application built on
 ## 🛠️ Technology Stack
 
 - **Frontend**: Next.js 16 (App Router), TypeScript, TailwindCSS v4, Lucide React, Zustand State Management
-- **Matrix Client Binding**: Rust WebAssembly Bridge (`@seucra/matrix-sdk-bridge` with direct bundler resolution)
+- **Matrix Client Binding**: Published Rust WebAssembly Bridge (`@seucra/matrix-sdk-bridge@0.1.4`)
 - **Backend Homeserver**: Matrix Synapse (`matrixdotorg/synapse:latest`)
 - **Database**: PostgreSQL 16
 - **Media Object Store**: MinIO S3 Compatible Storage
@@ -59,33 +59,34 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 ## ✨ Key Features
 
 ### 🔐 Authentication & Session Lifecycle
-- **User Registration & Login**: Corporate sign-up with email uniqueness validation.
-- **Session Export & Restore**: Matrix access token & Megolm key state stored securely in localStorage across browser reloads.
-- **Automatic Fallback Mode**: Local interactive fallback mode when homeserver is offline for uninterrupted testing.
+- **User Registration & Login**: Credentials are submitted to the configured Matrix homeserver; registration does not set an email address or display name.
+- **Session Export & Restore**: The bridge exports and restores a genuine Matrix session from tab-scoped sessionStorage.
+- **Backend Failure Handling**: Homeserver failures are shown to the user; Vigilant does not create local accounts, rooms, or messages as substitutes.
 
 ### 💬 Messaging & Timeline Sync
-- **Encrypted Channels & DMs**: Public and Megolm E2E Encrypted channels (`#general`, `#announcements`, `#security-compliance`) and Direct Messages.
+- **Matrix Rooms & Direct Messages**: Lists rooms and direct conversations returned by the homeserver; encryption state is not exposed by the installed bridge.
 - **Dynamic 20-Message Initial Loading**: Optimized memory footprint by loading the most recent 20 messages on room mount.
 - **Scroll-Up Infinite History Pagination**: Smoothly fetches earlier messages in 20-event batches when scrolling to top, maintaining exact scroll position without layout shifts or jumping.
-- **Real-Time Cross-Tab Synchronization**: Instant cross-tab messaging updates via Matrix sync stream and storage events.
+- **Matrix Synchronization**: The frontend requests sync startup and receives bridge message callbacks; bridge 0.1.4 does not report sync connection or completion state.
 - **Date Dividers & Visual Empty States**: Smart timeline date dividers (`Today`, `Yesterday`, formatted calendar dates) and rich onboarding cards for empty rooms.
 
 ### 👥 User Directory & Live Presence
-- **Matrix Homeserver Directory Search**: Debounced live search querying Synapse (`POST /_matrix/client/v3/user_directory/search`) allowing discovery of any registered teammate on the network.
-- **Live Bidirectional Presence (`m.presence`)**: Synchronizes user status (`online`, `busy`/Do Not Disturb, `away`, `offline`) via Matrix presence endpoints (`PUT/GET /_matrix/client/v3/presence/{userId}/status`) and cross-tab broadcasts.
-- **DM Header Status Badges**: Real-time status dot and label in direct conversation headers.
+- **Matrix Homeserver Directory Search**: Debounced search uses an authenticated direct Matrix request because bridge 0.1.4 has no directory method.
+- **Presence Lookup and Update**: Authenticated direct Matrix presence requests remain temporary bridge exceptions; status is not a live stream and unknown is distinct from offline.
 
 ### 📄 File Sharing & Downloads
-- **Image & PDF Attachments**: Composer attachment preview with instant file attachment and downloading.
-- **On-Demand Remote Media Decryption**: Fetches encrypted MXC bytes via WASM bridge `get_media()`, creating local object URLs for secure inline viewing and saving.
-- **Storage Quota Resilience**: Intelligent localStorage eviction and payload protection preventing browser quota crashes.
+- **Image & PDF Attachments**: Composer previews and sends supported raster images and PDF files through the bridge; upload progress is not exposed.
+- **On-Demand Matrix Media Retrieval**: Retrieves bytes through bridge `get_media()` using the opaque source returned with a Matrix message.
+- **Session Isolation**: Authentication state is kept in sessionStorage and cleared when signing out.
 
 ### 🛡️ Connection Architecture Transparency
-- **Live Synapse Sync Indicator**: Real-time pulsing badge in the sidebar header reflecting true Matrix Rust WASM connection status.
-- **Interactive Simulation Mode**: Explicit status pill and architecture modal when Synapse is offline, maintaining local testing capability without misleading connection claims.
+- **Connection Status**: The UI distinguishes authenticated session from sync status; sync remains unknown because the installed bridge exposes no lifecycle callback.
 - **Safety Safeguards**: Confirmation modals for sign-out and password visibility toggles on login/registration forms.
 
 ---
+
+Frontend setup, supported bridge APIs, known limitations, and verification are documented in [docs/README_FRONTEND.md](docs/README_FRONTEND.md), [docs/integration/FRONTEND_INTEGRATION_STATUS.md](docs/integration/FRONTEND_INTEGRATION_STATUS.md), and [docs/testing/FRONTEND_VERIFICATION_REPORT.md](docs/testing/FRONTEND_VERIFICATION_REPORT.md).
+
 
 ## 🔒 Security & Secret Management
 
@@ -106,7 +107,7 @@ Vigilant/
 │   │   ├── components/        # UI components & ChatWindow timeline
 │   │   ├── services/          # matrixService.ts WASM bridge & homeserver API layer
 │   │   └── store/             # Zustand state management (presence, rooms, messages)
-│   └── package.json           # Linked to local @seucra/matrix-sdk-bridge
+│   └── package.json           # Uses the published @seucra/matrix-sdk-bridge package
 ├── synapse/                   # Synapse homeserver configuration
 ├── matrix-sdk-bridge/         # Modular Rust WASM SDK source code & pkg output
 ├── docker-compose.yml         # Container orchestrator

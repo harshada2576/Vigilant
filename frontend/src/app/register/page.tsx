@@ -2,15 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Lock, ArrowRight, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import { matrixService } from "@/services/matrixService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function RegisterPage() {
-  const router = useRouter();
-  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -20,15 +17,10 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password.trim()) return;
+    if (!email.trim() || !password.trim()) return;
 
     if (password !== confirmPassword) {
       setError("Passwords do not match. Please verify both fields.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long.");
       return;
     }
 
@@ -36,10 +28,10 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await matrixService.register(name, email, password);
+      await matrixService.register(email, password);
       window.location.href = "/dashboard";
-    } catch (err: any) {
-      setError(err?.message || "Failed to create account. Please contact your system administrator.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create account. Please contact your system administrator.");
       setLoading(false);
     }
   };
@@ -65,10 +57,10 @@ export default function RegisterPage() {
       <div className="w-full max-w-md rounded-2xl border border-border p-8 bg-card/30 glass-card relative z-10 space-y-6">
         <div className="space-y-2 text-center">
           <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-            Register Device Key
+            Create Matrix account
           </h2>
           <p className="text-sm text-muted-foreground/80">
-            Join your sovereign corporate workspace
+              Create an account on the configured Matrix homeserver
           </p>
         </div>
 
@@ -82,26 +74,11 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-4 font-sans">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-foreground/90">
-              Full Name
+              Matrix username
             </label>
             <Input
               type="text"
-              placeholder="e.g. Sarah Connor"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              disabled={loading}
-              className="h-10 text-base bg-muted/20"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground/90">
-              Corporate Email Address
-            </label>
-            <Input
-              type="email"
-              placeholder="name@company.com"
+              placeholder="alice or @alice:matrix.example.org"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -109,6 +86,8 @@ export default function RegisterPage() {
               className="h-10 text-base bg-muted/20"
             />
           </div>
+
+          <p className="text-xs text-muted-foreground">Registration uses the local username on the configured homeserver. This form does not set an account email address or display name.</p>
 
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-foreground/90">
@@ -160,7 +139,7 @@ export default function RegisterPage() {
               <span className="size-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
             ) : (
               <>
-                Register Account
+              Register Matrix account
                 <ArrowRight className="size-5" />
               </>
             )}
@@ -168,7 +147,7 @@ export default function RegisterPage() {
         </form>
 
         <div className="text-center text-base text-muted-foreground">
-          Already have a device token?{" "}
+          Already have a Matrix account?{" "}
           <Link href="/login" className="font-semibold text-primary hover:underline">
             Sign In
           </Link>
@@ -176,7 +155,7 @@ export default function RegisterPage() {
       </div>
 
       <footer className="mt-12 text-sm text-muted-foreground relative z-10 select-none">
-        Self-Hosted Workspace • Secure Connection
+        Matrix homeserver client
       </footer>
     </div>
   );

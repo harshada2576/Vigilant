@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { safeHttpUrl } from "@/services/matrixPayload.mjs";
 
 interface AvatarProps {
   name: string;
@@ -10,6 +11,10 @@ interface AvatarProps {
 }
 
 export function Avatar({ name, src, status, size = "md", className }: AvatarProps) {
+  const safeSrc = safeHttpUrl(src);
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  const imgError = Boolean(safeSrc && failedSrc === safeSrc);
+
   const getInitials = (n: string) => {
     const parts = n.trim().split(/\s+/);
     if (parts.length >= 2 && parts[0] && parts[1]) {
@@ -50,7 +55,11 @@ export function Avatar({ name, src, status, size = "md", className }: AvatarProp
     return `hsl(${hue}, 40%, 30%)`;
   };
 
-  const bgStyle = src ? {} : { backgroundColor: getColorForName(name), color: "#f4f4f5" };
+  // Show initials when: no src provided, OR src failed to load
+  const showInitials = !safeSrc || imgError;
+  const bgStyle = showInitials
+    ? { backgroundColor: getColorForName(name), color: "#f4f4f5" }
+    : {};
 
   return (
     <div className={cn("relative shrink-0 select-none", className)}>
@@ -61,19 +70,16 @@ export function Avatar({ name, src, status, size = "md", className }: AvatarProp
         )}
         style={bgStyle}
       >
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img 
-            src={src} 
-            alt={name} 
-            className="size-full object-cover" 
-            onError={(e) => {
-              // If image fails, clear src to trigger letters fallback
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
-        ) : (
+        {showInitials ? (
           <span>{getInitials(name)}</span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={safeSrc}
+            alt={name}
+            className="size-full object-cover"
+            onError={() => setFailedSrc(safeSrc || "")}
+          />
         )}
       </div>
       {status && (

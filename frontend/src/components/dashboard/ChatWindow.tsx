@@ -1,26 +1,39 @@
 "use client";
 
 import * as React from "react";
-import { 
-  Send, 
-  Paperclip, 
-  Lock, 
-  Hash, 
+import {
+  Send,
+  Paperclip,
+  Lock,
+  Hash,
   Users,
   ShieldCheck,
   Loader2,
   X,
-  FileText
+  FileText,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMatrixStore, User } from "@/store/matrixStore";
 import { matrixService } from "@/services/matrixService";
 import { ChatBubble } from "@/components/ui/chat-bubble";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { safeMediaMime } from "@/services/matrixPayload.mjs";
+import { Input } from "@/components/ui/input";
 
 interface ChatWindowProps {
   roomId: string;
+}
+
+const EMPTY_MESSAGES: ReturnType<typeof useMatrixStore.getState>["messages"][string] = [];
+
+interface PendingAttachment {
+  file: File;
+  name: string;
+  isImage: boolean;
+  fileUrl: string;
+  mimeType: string;
 }
 
 function formatDateDivider(timestamp: number): string {
@@ -65,53 +78,122 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
   const users = useMatrixStore((state) => state.users);
 
   // States
-  const [text, setText] = React.useState("");
-  const [isUploading, setIsUploading] = React.useState(false);
-  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
-  const [pendingFile, setPendingFile] = React.useState<{
-    file: File;
-    name: string;
-    isImage: boolean;
-    fileUrl: string;
-    mimeType: string;
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
+  const text = drafts[roomId] || "";
+  const setText = (value: string) => setDrafts((current) => ({ ...current, [roomId]: value }));
+  const [isSending, setIsSending] = React.useState(false);
+  const [sendAcceptedRooms, setSendAcceptedRooms] = React.useState<Record<string, boolean>>({});
+  const [loadingMoreRoomId, setLoadingMoreRoomId] = React.useState<string | null>(null);
+  const [sendFailure, setSendFailure] = React.useState<{ roomId: string; message: string } | null>(null);
+  const [historyFailure, setHistoryFailure] = React.useState<{
+    roomId: string;
+    message: string;
   } | null>(null);
-  
+  const [historyStatus, setHistoryStatus] = React.useState<{
+    roomId: string;
+    status: "loading" | "loaded" | "error";
+  } | null>(null);
+  const [pendingFiles, setPendingFiles] = React.useState<Record<string, PendingAttachment | undefined>>({});
+  const pendingFile = pendingFiles[roomId] || null;
+  const setPendingFile = (file: PendingAttachment | null) => setPendingFiles((current) => ({ ...current, [roomId]: file || undefined }));
+  const sendError = sendFailure?.roomId === roomId ? sendFailure.message : "";
+  const [membersOpen, setMembersOpen] = React.useState(false);
+  const [inviteUserId, setInviteUserId] = React.useState("");
+  const [inviteError, setInviteError] = React.useState("");
+  const [inviteSuccess, setInviteSuccess] = React.useState("");
+  const [isInviting, setIsInviting] = React.useState(false);
+
   // Refs
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const lastMessageIdRef = React.useRef<string | null>(null);
+  const isSendingRef = React.useRef(false);
+  const isLoadingMoreRef = React.useRef(false);
+  const currentRoomIdRef = React.useRef(roomId);
+  const mountedRef = React.useRef(false);
+  const fileReaderRef = React.useRef<FileReader | null>(null);
 
   // Find active room metadata
   const room = rooms.find((r) => r.id === roomId);
-  const messages = allMessages[roomId] || [];
+  const messages = allMessages[roomId] ?? EMPTY_MESSAGES;
+  const historyError = historyFailure?.roomId === roomId ? historyFailure.message : "";
+  const currentHistoryStatus = historyStatus?.roomId === roomId ? historyStatus.status : "loading";
+  const isLoadingMore = loadingMoreRoomId === roomId;
   const hasMore = useMatrixStore((state) => state.hasMoreMessages[roomId] ?? true);
+
+  React.useEffect(() => {
+    currentRoomIdRef.current = roomId;
+  }, [roomId]);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (fileReaderRef.current?.readyState === FileReader.LOADING) fileReaderRef.current.abort();
+    };
+  }, []);
 
   // Fetch initial 20 messages whenever room changes
   React.useEffect(() => {
     lastMessageIdRef.current = null;
-    matrixService.getRoomHistory(roomId, 20);
+    let active = true;
+    matrixService.getRoomHistory(roomId, 20).then(() => {
+      if (active) setHistoryStatus({ roomId, status: "loaded" });
+    }).catch((error: unknown) => {
+      if (active) {
+        setHistoryFailure({
+          roomId,
+          message: error instanceof Error ? error.message : "Could not load room history.",
+        });
+        setHistoryStatus({ roomId, status: "error" });
+      }
+    });
+    return () => { active = false; };
   }, [roomId]);
+
+  // Auto-resize textarea to fit content (up to ~6 lines)
+  React.useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+  }, [text]);
 
   // Handle scroll-up to load older messages (20 at a time)
   const handleScroll = async () => {
     const container = scrollContainerRef.current;
-    if (!container || isLoadingMore || !hasMore) return;
+    if (!container || isLoadingMore || isLoadingMoreRef.current || !hasMore || currentHistoryStatus !== "loaded") return;
 
     if (container.scrollTop < 60) {
-      setIsLoadingMore(true);
+      isLoadingMoreRef.current = true;
+      setLoadingMoreRoomId(roomId);
       const prevScrollHeight = container.scrollHeight;
       const prevScrollTop = container.scrollTop;
 
-      await matrixService.loadMoreHistory(roomId, 20);
+      try {
+        await matrixService.loadMoreHistory(roomId, 20);
+        if (mountedRef.current && currentRoomIdRef.current === roomId) setHistoryFailure(null);
+      } catch (error) {
+        if (mountedRef.current && currentRoomIdRef.current === roomId) {
+          setHistoryFailure({
+            roomId,
+            message: error instanceof Error ? error.message : "Could not load older messages.",
+          });
+        }
+      }
 
       requestAnimationFrame(() => {
-        if (scrollContainerRef.current) {
+        if (scrollContainerRef.current && currentRoomIdRef.current === roomId) {
           const newScrollHeight = scrollContainerRef.current.scrollHeight;
           const deltaHeight = newScrollHeight - prevScrollHeight;
           scrollContainerRef.current.scrollTop = prevScrollTop + deltaHeight;
         }
-        setIsLoadingMore(false);
+        if (mountedRef.current) {
+          setLoadingMoreRoomId((activeRoomId) => activeRoomId === roomId ? null : activeRoomId);
+        }
+        isLoadingMoreRef.current = false;
       });
     }
   };
@@ -127,61 +209,52 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
     }
   }, [messages]);
 
-  // Sync messages on storage event (cross-tab) or custom event (same tab)
-  React.useEffect(() => {
-    const handleStorageEvent = (event: StorageEvent) => {
-      // Only react to changes for this specific room's messages
-      if (
-        event.key === null ||
-        event.key === `vigilant_shared_messages_${roomId}`
-      ) {
-        matrixService.syncRoomMessages(roomId);
-      }
-    };
-
-    const handleSameTabEvent = () => {
-      if (roomId) matrixService.syncRoomMessages(roomId);
-    };
-
-    window.addEventListener("storage", handleStorageEvent as EventListener);
-    window.addEventListener("vigilant_message_sent", handleSameTabEvent);
-
-    // Poll every 1.5s as fallback (e.g. when Synapse delivers via bridge callback)
-    const interval = setInterval(handleSameTabEvent, 1500);
-    return () => {
-      window.removeEventListener("storage", handleStorageEvent as EventListener);
-      window.removeEventListener("vigilant_message_sent", handleSameTabEvent);
-      clearInterval(interval);
-    };
-  }, [roomId]);
-
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if ((!text.trim() && !pendingFile) || !room) return;
+    if (isSendingRef.current) return;
 
-    if (pendingFile) {
-      let fileData: Uint8Array | undefined;
-      try {
+    isSendingRef.current = true;
+    setIsSending(true);
+    setSendFailure(null);
+    setSendAcceptedRooms((current) => ({ ...current, [roomId]: false }));
+    try {
+      if (pendingFile) {
         const buffer = await pendingFile.file.arrayBuffer();
-        fileData = new Uint8Array(buffer);
-      } catch (err) {
-        console.warn("Failed to convert file buffer to Uint8Array:", err);
-      }
+        const fileData = new Uint8Array(buffer);
 
-      matrixService.sendMessage(
-        room.id,
-        text.trim() || (pendingFile.isImage ? "" : `Attachment: ${pendingFile.name}`),
-        pendingFile.isImage ? "image" : "file",
-        pendingFile.name,
-        pendingFile.fileUrl,
-        fileData,
-        pendingFile.mimeType
-      );
-      setPendingFile(null);
-      setText("");
-    } else {
-      matrixService.sendMessage(room.id, text.trim(), "text");
-      setText("");
+        await matrixService.sendMessage(
+          roomId,
+          text.trim() || (pendingFile.isImage ? "" : `Attachment: ${pendingFile.name}`),
+          pendingFile.isImage ? "image" : "file",
+          pendingFile.name,
+          pendingFile.fileUrl,
+          fileData,
+          pendingFile.mimeType
+        );
+        setPendingFile(null);
+        setText("");
+      } else {
+        await matrixService.sendMessage(roomId, text.trim(), "text");
+        setText("");
+      }
+      if (mountedRef.current) setSendAcceptedRooms((current) => ({ ...current, [roomId]: true }));
+    } catch (error) {
+      if (mountedRef.current) setSendFailure({
+        roomId,
+        message: `${error instanceof Error ? error.message : "Message could not be sent."} Matrix did not confirm acceptance; review the room before retrying because a lost response can leave the outcome uncertain.`,
+      });
+    } finally {
+      isSendingRef.current = false;
+      if (mountedRef.current) setIsSending(false);
+    }
+  };
+
+  // Enter sends; Shift+Enter inserts newline
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
@@ -193,25 +266,44 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
     const file = e.target.files?.[0];
     if (!file || !room) return;
 
-    const isImage = file.type.startsWith("image/");
+    const isImage = safeMediaMime("image", file.type) !== undefined;
     const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
     if (!isImage && !isPdf) {
-      alert("Only Images and PDF files are allowed.");
+      setSendFailure({ roomId, message: "Supported images are JPEG, PNG, GIF, WebP, or AVIF. PDF files are also allowed." });
+      return;
+    }
+    if (isPdf && !file.name.toLowerCase().endsWith(".pdf")) {
+      setSendFailure({ roomId, message: "PDF attachments must use a .pdf file name." });
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setSendFailure({ roomId, message: "Attachments must be 25 MB or smaller." });
       return;
     }
 
+    setSendFailure(null);
+    if (fileReaderRef.current?.readyState === FileReader.LOADING) fileReaderRef.current.abort();
     const reader = new FileReader();
     reader.onload = () => {
+      if (!mountedRef.current) return;
       const fileUrl = reader.result as string;
+      if (typeof fileUrl !== "string") {
+        setSendFailure({ roomId, message: "The attachment could not be read. Please select it again." });
+        return;
+      }
       setPendingFile({
         file,
         name: file.name,
         isImage,
         fileUrl,
-        mimeType: file.type,
+        mimeType: isPdf ? "application/pdf" : file.type,
       });
     };
+    reader.onerror = () => {
+      if (mountedRef.current) setSendFailure({ roomId, message: "The attachment could not be read. Please select it again." });
+    };
+    fileReaderRef.current = reader;
     reader.readAsDataURL(file);
 
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -230,96 +322,55 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
   const getRoomDisplayName = () => {
     if (room.type === "channel") return room.name;
     const currentId = currentUser?.id?.toLowerCase() || "";
-    const currentEmail = currentUser?.email?.toLowerCase() || "";
-    const currentName = currentUser?.name?.toLowerCase() || "";
-
-    const otherMember = room.members.find(
-      (m) =>
-        m.toLowerCase() !== currentId &&
-        m.toLowerCase() !== currentEmail &&
-        m.toLowerCase() !== currentName
-    ) || room.name;
-
-    const rawMember = otherMember.trim();
-    const cleanMember = rawMember.toLowerCase();
-    const username = cleanMember.split(":")[0].replace("@", "").toLowerCase();
-
-    // 1. Check in-memory store
-    const matchUser = users.find((u) => {
-      const uId = u.id.toLowerCase();
-      const uEmail = u.email.toLowerCase();
-      const uUsername = u.email.split("@")[0].toLowerCase();
-
-      return (
-        uId === cleanMember ||
-        uEmail === cleanMember ||
-        cleanMember === uUsername ||
-        cleanMember.startsWith(`@${uUsername}:`)
-      );
-    });
+    const targetUserId = room.directUserId || room.members.find((member) => member.toLowerCase() !== currentId);
+    const matchUser = users.find((user) => user.id.toLowerCase() === targetUserId?.toLowerCase());
     if (matchUser) return matchUser.name;
-
-    // 2. Check shared localStorage registered users & map
-    if (typeof window !== "undefined") {
-      try {
-        const regUsers = JSON.parse(localStorage.getItem("vigilant_registered_users") || "[]");
-        const regMatch = regUsers.find((u: any) => {
-          const uId = u.id.toLowerCase();
-          const uEmail = u.email.toLowerCase();
-          const uUsername = u.email.split("@")[0].toLowerCase();
-          return (
-            uId === cleanMember ||
-            uEmail === cleanMember ||
-            username === uUsername ||
-            cleanMember.startsWith(`@${uUsername}:`)
-          );
-        });
-        if (regMatch) return regMatch.name;
-
-        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
-        if (userMap[cleanMember]) return userMap[cleanMember];
-        if (userMap[username]) return userMap[username];
-        if (userMap[rawMember]) return userMap[rawMember];
-      } catch (e) {}
-    }
-
-    if (username.length > 0 && !username.startsWith("!")) {
-      return username.charAt(0).toUpperCase() + username.slice(1);
-    }
-    return room.name;
+    if (room.name !== room.id) return room.name;
+    return targetUserId?.startsWith("@") ? targetUserId.slice(1).split(":")[0] : room.name;
   };
 
   const getDMStatus = (): User["status"] => {
-    if (room.type !== "dm") return "online";
-    const currentClean = (currentUser?.name || "").toLowerCase();
-    const currentIdClean = (currentUser?.id || "").toLowerCase();
-    const currentEmailClean = (currentUser?.email || "").toLowerCase();
-
-    const otherMember = room.members.find(
-      (m) =>
-        m.toLowerCase() !== currentClean &&
-        m.toLowerCase() !== currentIdClean &&
-        m.toLowerCase() !== currentEmailClean
-    ) || room.name;
-
-    const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
-    const cached = matrixService.getCachedUserPresence(cleanMember);
-    if (cached) return cached;
-
-    const matchUser = users.find((u) => {
-      const uId = u.id.toLowerCase();
-      const uEmail = u.email.toLowerCase();
-      const uUsername = u.email.split("@")[0].toLowerCase();
-      return (
-        uId === cleanMember ||
-        uEmail === cleanMember ||
-        cleanMember === uUsername ||
-        cleanMember.startsWith(`@${uUsername}:`)
-      );
-    });
-
-    return matchUser?.status || "offline";
+    if (room.type !== "dm") return undefined;
+    const targetUserId = room.directUserId || room.members.find((member) => member.toLowerCase() !== currentUser?.id.toLowerCase());
+    return users.find((user) => user.id.toLowerCase() === targetUserId?.toLowerCase())?.status;
   };
+
+  const retryHistory = () => {
+    setHistoryFailure(null);
+    setHistoryStatus({ roomId, status: "loading" });
+    matrixService.getRoomHistory(roomId, 20).then(() => {
+      if (currentRoomIdRef.current === roomId) setHistoryStatus({ roomId, status: "loaded" });
+    }).catch((error: unknown) => {
+      if (currentRoomIdRef.current === roomId) {
+        setHistoryFailure({ roomId, message: error instanceof Error ? error.message : "Could not load room history." });
+        setHistoryStatus({ roomId, status: "error" });
+      }
+    });
+  };
+
+  const inviteMember = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const userId = inviteUserId.trim();
+    if (isInviting) return;
+    if (!/^@[^:\s]+:.+$/.test(userId)) {
+      setInviteError("Enter an exact Matrix user ID such as @name:server.org.");
+      return;
+    }
+    setIsInviting(true);
+    setInviteError("");
+    setInviteSuccess("");
+    try {
+      await matrixService.inviteUser(roomId, userId);
+      setInviteSuccess(`Matrix accepted the invitation for ${userId}.`);
+      setInviteUserId("");
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "Matrix could not invite this user.");
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const isComposing = isSending;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full bg-background select-none font-sans relative">
@@ -345,16 +396,18 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
             </span>
             {room.type === "dm" ? (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                <span
-                  className={cn(
-                    "size-2 rounded-full",
-                    getDMStatus() === "online" && "bg-emerald-500",
-                    getDMStatus() === "busy" && "bg-rose-500",
-                    getDMStatus() === "away" && "bg-amber-500",
-                    getDMStatus() === "offline" && "bg-zinc-500"
-                  )}
-                />
-                <span className="capitalize">{getDMStatus()}</span>
+                {getDMStatus() ? (
+                  <>
+                    <span className={cn(
+                      "size-2 rounded-full",
+                      getDMStatus() === "online" && "bg-emerald-500",
+                      getDMStatus() === "busy" && "bg-rose-500",
+                      getDMStatus() === "away" && "bg-amber-500",
+                      getDMStatus() === "offline" && "bg-zinc-500"
+                    )} />
+                    <span className="capitalize">{getDMStatus()}</span>
+                  </>
+                ) : <span>Presence unavailable</span>}
               </div>
             ) : room.topic ? (
               <span className="text-xs text-muted-foreground truncate max-w-md">
@@ -366,10 +419,10 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
 
         {/* Member directory details */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground px-3 py-1 rounded-lg border border-border bg-muted/20">
+          <Button variant="outline" size="sm" onClick={() => { setMembersOpen(true); setInviteError(""); setInviteSuccess(""); }}>
             <Users className="size-4" />
-            <span>{room.members.length} Members</span>
-          </div>
+            Members
+          </Button>
         </div>
       </header>
 
@@ -408,19 +461,16 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
               )}
             </div>
             <h3 className="text-xl font-bold text-foreground font-heading mb-1.5">
-              {room.type === "channel" ? `#${room.name}` : getRoomDisplayName()}
+              {historyError ? "History unavailable" : room.type === "channel" ? `#${room.name}` : getRoomDisplayName()}
             </h3>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mb-4 leading-relaxed">
-              {room.topic || (room.type === "channel"
-                ? `Welcome to the start of #${room.name}. Share messages, updates, and files with your team.`
-                : `This is the beginning of your private conversation with ${getRoomDisplayName()}.`)}
+              {historyError || (currentHistoryStatus === "loading"
+                ? "Loading Matrix messages…"
+                : room.topic || (room.type === "channel"
+                  ? `Welcome to the start of #${room.name}. Share messages, updates, and files with your team.`
+                  : `This is the beginning of your private conversation with ${getRoomDisplayName()}.`))}
             </p>
-            {room.isEncrypted && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
-                <ShieldCheck className="size-3.5" />
-                End-to-End Encrypted via Megolm
-              </div>
-            )}
+            {historyError && <Button variant="outline" size="sm" onClick={retryHistory}>Retry history</Button>}
           </div>
         ) : (
           messages.map((msg, index) => {
@@ -462,11 +512,29 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
 
       {/* Compose Form */}
       <div className="p-3 border-t border-border bg-sidebar/10 shrink-0">
+        {(sendError || historyError) && (
+          <div role="alert" className="mb-2 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <AlertCircle className="size-4 shrink-0" />
+            <span className="flex-1">{sendError || historyError}</span>
+            {historyError && (
+              <button type="button" onClick={retryHistory} className="font-semibold underline underline-offset-2">Retry history</button>
+            )}
+            {sendError && (
+              <button type="button" onClick={() => void handleSend()} disabled={isSending} className="font-semibold underline underline-offset-2">Try again</button>
+            )}
+          </div>
+        )}
+        {isSending ? (
+          <p role="status" className="mb-2 text-xs text-muted-foreground">Sending to Matrix…</p>
+        ) : sendAcceptedRooms[roomId] ? (
+          <p role="status" className="mb-2 text-xs text-muted-foreground">Matrix accepted the send request. Delivery receipts are not exposed by the installed bridge.</p>
+        ) : null}
         {/* Pending file preview bar */}
         {pendingFile && (
           <div className="mb-2 p-2.5 rounded-lg border border-primary/30 bg-primary/10 flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               {pendingFile.isImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={pendingFile.fileUrl} alt="preview" className="size-10 rounded object-cover border border-border" />
               ) : (
                 <div className="size-10 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
@@ -475,7 +543,7 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
               )}
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-bold text-foreground truncate">{pendingFile.name}</span>
-                <span className="text-[10px] text-muted-foreground">Ready to send. Click Send or press Enter.</span>
+                <span className="text-[10px] text-muted-foreground">{isSending ? "Sending attachment to Matrix…" : "Ready to send. Click Send or press Enter."}</span>
               </div>
             </div>
             <button
@@ -489,17 +557,18 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
           </div>
         )}
 
-        <form onSubmit={handleSend} className="flex items-center gap-2 relative">
+        <form onSubmit={handleSend} className="flex items-end gap-2 relative">
           {/* File attach button */}
           <button
             type="button"
             onClick={handleAttachClick}
-            className="p-2.5 bg-muted/30 hover:bg-muted border border-border hover:border-border/80 text-muted-foreground hover:text-foreground rounded-lg transition-all"
+            disabled={isComposing}
+            className="p-2.5 bg-muted/30 hover:bg-muted border border-border hover:border-border/80 text-muted-foreground hover:text-foreground rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             title="Attach file (Images/PDFs only)"
           >
             <Paperclip className="size-4.5" />
           </button>
-          
+
           <input
             type="file"
             ref={fileInputRef}
@@ -508,36 +577,57 @@ export function ChatWindow({ roomId }: ChatWindowProps) {
             accept="image/*,application/pdf"
           />
 
-          <Input
-            type="text"
+          {/* Auto-growing textarea */}
+          <textarea
+            ref={textareaRef}
+            rows={1}
             placeholder={
-              room.isEncrypted 
-                ? "Send encrypted message..." 
-                : "Send message..."
+              "Send message..."
             }
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="flex-1 h-10 rounded-lg text-sm"
+            onKeyDown={handleKeyDown}
+            disabled={isComposing}
+            className={cn(
+              "flex-1 min-h-[40px] max-h-36 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto custom-scrollbar"
+            )}
           />
 
           <Button
             type="submit"
             size="default"
             className="h-10 px-4 shrink-0 flex items-center justify-center"
-            disabled={!text.trim() && !pendingFile}
+            disabled={(!text.trim() && !pendingFile) || isComposing}
           >
-            <Send className="size-4.5" />
+            {isSending ? (
+              <Loader2 className="size-4.5 animate-spin" />
+            ) : (
+              <Send className="size-4.5" />
+            )}
           </Button>
         </form>
         <div className="flex items-center justify-between text-xs text-muted-foreground px-1 mt-2">
-          <span>Press Enter to send</span>
-          {room.isEncrypted && (
-            <span className="text-primary font-semibold flex items-center gap-1 select-none">
-              🔒 End-to-End Encrypted
-            </span>
-          )}
+          <span>Press Enter to send · Shift+Enter for new line</span>
         </div>
       </div>
+      <Modal isOpen={membersOpen} onClose={() => setMembersOpen(false)} title="Room members">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {room.memberListAvailable
+              ? "Member data is available for this room."
+              : "The installed Matrix bridge does not expose room member data. Member count and membership status are unavailable."}
+          </p>
+          <form onSubmit={inviteMember} className="space-y-3">
+            <label htmlFor="invite-matrix-user" className="block text-sm font-semibold text-foreground">Invite a Matrix user</label>
+            <Input id="invite-matrix-user" value={inviteUserId} onChange={(event) => { setInviteUserId(event.target.value); setInviteError(""); setInviteSuccess(""); }} placeholder="@username:server.org" disabled={isInviting} />
+            {inviteError && <p role="alert" className="text-xs text-destructive">{inviteError}</p>}
+            {inviteSuccess && <p role="status" className="text-xs text-emerald-500">{inviteSuccess}</p>}
+            <Button type="submit" disabled={isInviting || !inviteUserId.trim()}>
+              {isInviting ? "Inviting…" : "Invite"}
+            </Button>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 }

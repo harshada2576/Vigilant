@@ -1,40 +1,10 @@
 import { create } from "zustand";
+import type { MatrixMessage, MatrixPresence, MatrixRoom, MatrixSyncError, MatrixSyncStatus, MatrixUser } from "../types/matrix";
+import { mergeUniqueMessages, sortMessages } from "../services/matrixPayload.mjs";
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatarUrl?: string;
-  status?: "online" | "offline" | "away" | "busy";
-}
-
-export interface Room {
-  id: string;
-  name: string;
-  topic?: string;
-  type: "channel" | "dm";
-  avatarUrl?: string;
-  unreadCount: number;
-  members: string[]; // User IDs
-  isEncrypted: boolean;
-  createdAt: number;
-}
-
-export interface Message {
-  id: string;
-  roomId: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar?: string;
-  content: string;
-  timestamp: number;
-  type: "text" | "image" | "file";
-  fileUrl?: string;
-  fileName?: string;
-  mediaSource?: string;
-  mimeType?: string;
-  isEncrypted: boolean;
-}
+export type User = MatrixUser;
+export type Room = MatrixRoom;
+export type Message = MatrixMessage;
 
 interface MatrixState {
   currentUser: User | null;
@@ -44,9 +14,10 @@ interface MatrixState {
   activeRoomId: string | null;
   users: User[]; // User directory for search/DMs
   isConnecting: boolean;
-  isSynced: boolean;
-  connectionMode: "wasm" | "local" | "connecting";
-  
+  syncStatus: MatrixSyncStatus;
+  connectionError: MatrixSyncError | null;
+  connectionMode: "connecting" | "authenticated" | "disconnected" | "error";
+
   // Actions
   setCurrentUser: (user: User | null) => void;
   setRooms: (rooms: Room[]) => void;
@@ -58,10 +29,11 @@ interface MatrixState {
   setMessages: (roomId: string, messages: Message[]) => void;
   setHasMoreMessages: (roomId: string, hasMore: boolean) => void;
   setUsers: (users: User[]) => void;
-  updateUserStatus: (userId: string, status: User["status"]) => void;
+  updateUserPresence: (userId: string, presence: MatrixPresence, status?: User["status"], statusMessage?: string) => void;
   setConnecting: (isConnecting: boolean) => void;
-  setSynced: (isSynced: boolean) => void;
-  setConnectionMode: (mode: "wasm" | "local" | "connecting") => void;
+  setSyncStatus: (status: MatrixSyncStatus) => void;
+  setConnectionError: (error: MatrixSyncError | null) => void;
+  setConnectionMode: (mode: "connecting" | "authenticated" | "disconnected" | "error") => void;
   reset: () => void;
 }
 
@@ -73,8 +45,9 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   activeRoomId: null,
   users: [],
   isConnecting: false,
-  isSynced: false,
-  connectionMode: "connecting",
+  syncStatus: "idle",
+  connectionError: null,
+  connectionMode: "disconnected",
 
   setCurrentUser: (user) => set({ currentUser: user }),
   setRooms: (rooms) => set(() => {
@@ -90,7 +63,7 @@ export const useMatrixStore = create<MatrixState>((set) => ({
 
       if (room.type === "dm") {
         // Fingerprint = sorted lowercase members joined — identifies unique conversations
-        const fingerprint = room.members
+        const fingerprint = (room.directUserId ? [room.directUserId] : room.members)
           .map((m) => m.toLowerCase())
           .sort()
           .join("|");
@@ -128,33 +101,27 @@ export const useMatrixStore = create<MatrixState>((set) => ({
     activeRoomId: state.activeRoomId === roomId ? null : state.activeRoomId,
   })),
   setActiveRoomId: (roomId) => set((state) => {
-    // Clear unread counts for this room
+    // Clear only counts accumulated from real events received in this session.
     const updatedRooms = state.rooms.map((room) =>
-      room.id === roomId ? { ...room, unreadCount: 0 } : room
+      room.id === roomId && room.unreadCount !== undefined ? { ...room, unreadCount: 0 } : room
     );
     return { activeRoomId: roomId, rooms: updatedRooms };
   }),
   addMessage: (roomId, message) => set((state) => {
     const roomMessages = state.messages[roomId] || [];
-    // Prevent duplicate messages by ID or timestamp+sender+content fingerprint
-    if (
-      roomMessages.some(
-        (m) =>
-          m.id === message.id ||
-          (m.timestamp === message.timestamp &&
-            m.senderId === message.senderId &&
-            m.content === message.content)
-      )
-    ) {
+    // Bridge 0.1.4 does not expose Matrix event IDs, so message IDs are stable
+    // fingerprints derived at the service boundary. Do not collapse separate
+    // messages merely because their displayed text and timestamp happen to match.
+    if (roomMessages.some((m) => m.id === message.id)) {
       return {};
     }
-    
-    const updatedMessages = [...roomMessages, message];
-    
+
+    const updatedMessages = mergeUniqueMessages(roomMessages, [message]);
+
     // Update room unread count if the room is not active
     const updatedRooms = state.rooms.map((room) => {
       if (room.id === roomId && state.activeRoomId !== roomId) {
-        return { ...room, unreadCount: room.unreadCount + 1 };
+        return { ...room, unreadCount: (room.unreadCount ?? 0) + 1 };
       }
       return room;
     });
@@ -169,16 +136,8 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   }),
   prependMessages: (roomId, newOlderMessages) => set((state) => {
     const current = state.messages[roomId] || [];
-    const currentIds = new Set(current.map((m) => m.id));
-    const currentKeys = new Set(current.map((m) => `${m.senderId}|${m.timestamp}|${m.content}`));
-
-    const filteredOlder = newOlderMessages.filter(
-      (m) => !currentIds.has(m.id) && !currentKeys.has(`${m.senderId}|${m.timestamp}|${m.content}`)
-    );
-
-    if (filteredOlder.length === 0) return {};
-
-    const merged = [...filteredOlder, ...current].sort((a, b) => a.timestamp - b.timestamp);
+    const merged = mergeUniqueMessages(current, newOlderMessages);
+    if (merged.length === current.length) return {};
     return {
       messages: {
         ...state.messages,
@@ -189,7 +148,7 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   setMessages: (roomId, messages) => set((state) => ({
     messages: {
       ...state.messages,
-      [roomId]: messages,
+      [roomId]: sortMessages(messages),
     },
   })),
   setHasMoreMessages: (roomId, hasMore) => set((state) => ({
@@ -199,19 +158,15 @@ export const useMatrixStore = create<MatrixState>((set) => ({
     },
   })),
   setUsers: (users) => set({ users }),
-  updateUserStatus: (userId, status) => set((state) => {
-    const updatedUsers = state.users.map((u) =>
-      u.id === userId ? { ...u, status } : u
-    );
-    // Also update currentUser if it's the same user
-    const updatedCurrentUser = state.currentUser?.id === userId 
-      ? { ...state.currentUser, status } 
-      : state.currentUser;
-      
-    return { users: updatedUsers, currentUser: updatedCurrentUser };
+  updateUserPresence: (userId, presence, status, statusMessage) => set((state) => {
+    const update = (user: User): User => ({ ...user, presence, status, statusMessage });
+    return {
+      currentUser: state.currentUser?.id === userId ? update(state.currentUser) : state.currentUser,
+    };
   }),
   setConnecting: (isConnecting) => set({ isConnecting }),
-  setSynced: (isSynced) => set({ isSynced }),
+  setSyncStatus: (syncStatus) => set({ syncStatus }),
+  setConnectionError: (connectionError) => set({ connectionError }),
   setConnectionMode: (connectionMode) => set({ connectionMode }),
   reset: () => set({
     currentUser: null,
@@ -221,7 +176,8 @@ export const useMatrixStore = create<MatrixState>((set) => ({
     activeRoomId: null,
     users: [],
     isConnecting: false,
-    isSynced: false,
-    connectionMode: "connecting",
+    syncStatus: "idle",
+    connectionError: null,
+    connectionMode: "disconnected",
   }),
 }));
