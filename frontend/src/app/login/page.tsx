@@ -2,15 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Lock, ArrowRight, ShieldAlert, Key, Eye, EyeOff } from "lucide-react";
+import { Lock, ArrowRight, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import { matrixService } from "@/services/matrixService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
-  const router = useRouter();
-  
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -28,8 +25,8 @@ export default function LoginPage() {
     try {
       await matrixService.login(email, password);
       window.location.href = "/dashboard";
-    } catch (err: any) {
-      setError(err?.message || "Failed to sign in. Please verify your credentials.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to sign in. Please verify your credentials.");
       setLoading(false);
     }
   };
@@ -58,7 +55,7 @@ export default function LoginPage() {
             Access your Workspace
           </h2>
           <p className="text-base text-muted-foreground/80">
-            Enter your secure corporate login details
+            Enter the account credentials for your configured Matrix homeserver
           </p>
         </div>
 
@@ -72,11 +69,11 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-5 font-sans">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground/90">
-              Email Address
+              Matrix username
             </label>
             <Input
-              type="email"
-              placeholder="Enter your corporate email"
+              type="text"
+              placeholder="alice or @alice:matrix.example.org"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -84,6 +81,7 @@ export default function LoginPage() {
               className="h-11 text-base bg-muted/20"
             />
           </div>
+          <p className="text-xs text-muted-foreground">The bridge signs in on the configured homeserver using its local username. A full Matrix ID is accepted.</p>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -130,15 +128,15 @@ export default function LoginPage() {
         </form>
 
         <div className="text-center text-base text-muted-foreground">
-          Don&apos;t have a device key?{" "}
+          Don&apos;t have a Matrix account?{" "}
           <Link href="/register" className="font-semibold text-primary hover:underline">
-            Register device
+            Register account
           </Link>
         </div>
       </div>
 
       <footer className="mt-12 text-sm text-muted-foreground relative z-10 select-none">
-        Self-Hosted Workspace • Secure Connection
+        Matrix homeserver client
       </footer>
     </div>
   );

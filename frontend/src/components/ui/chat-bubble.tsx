@@ -3,6 +3,7 @@ import { ShieldCheck, FileText, Download, Copy, Check, Loader2 } from "lucide-re
 import { cn } from "@/lib/utils";
 import { Avatar } from "./avatar";
 import { matrixService } from "@/services/matrixService";
+import { mediaBytesMatchMime, safeHttpUrl, safeMediaMime } from "@/services/matrixPayload.mjs";
 
 interface ChatBubbleProps {
   senderName: string;
@@ -34,41 +35,58 @@ export function ChatBubble({
   className,
 }: ChatBubbleProps) {
   const [copied, setCopied] = React.useState(false);
-  const [resolvedUrl, setResolvedUrl] = React.useState<string | undefined>(fileUrl);
-  const [loadingMedia, setLoadingMedia] = React.useState(false);
+  const [downloadedMedia, setDownloadedMedia] = React.useState<{
+    source: string;
+    url: string;
+  } | null>(null);
+  const safeFileUrl = safeHttpUrl(fileUrl);
+  const resolvedUrl = safeFileUrl || (downloadedMedia?.source === mediaSource ? downloadedMedia?.url : undefined);
+  const [mediaState, setMediaState] = React.useState<{
+    source: string;
+    error?: string;
+  } | null>(null);
+  const [mediaAttempt, setMediaAttempt] = React.useState(0);
+  const loadingMedia = Boolean(
+    mediaSource && !safeFileUrl && mediaState?.source !== mediaSource
+  );
+  const mediaError = mediaState?.source === mediaSource ? mediaState?.error || "" : "";
 
   React.useEffect(() => {
-    if (fileUrl) {
-      setResolvedUrl(fileUrl);
-      return;
-    }
-
-    if (mediaSource && !resolvedUrl) {
+    if (safeFileUrl || !mediaSource) return;
+    {
       let isMounted = true;
-      setLoadingMedia(true);
+      let objectUrl: string | undefined;
       matrixService.getMedia(mediaSource).then((bytes) => {
-        if (!isMounted || !bytes) {
-          setLoadingMedia(false);
-          return;
-        }
+        if (!isMounted) return;
         try {
-          const blob = new Blob([bytes as any], {
-            type: mimeType || (type === "image" ? "image/jpeg" : "application/pdf"),
+          const supportedMime = safeMediaMime(type, mimeType);
+          if (!supportedMime || !mediaBytesMatchMime(bytes, supportedMime)) {
+            throw new Error("Matrix media content did not match a supported file type.");
+          }
+          const blob = new Blob([bytes.slice().buffer], {
+            type: supportedMime,
           });
-          const url = URL.createObjectURL(blob);
-          setResolvedUrl(url);
-        } catch (e) {
-          console.warn("Failed to create blob from media bytes:", e);
-        } finally {
-          setLoadingMedia(false);
+          objectUrl = URL.createObjectURL(blob);
+          setDownloadedMedia({ source: mediaSource, url: objectUrl });
+          setMediaState({ source: mediaSource });
+        } catch {
+          setMediaState({ source: mediaSource, error: "Matrix media could not be displayed." });
+        }
+      }).catch((error: unknown) => {
+        if (isMounted) {
+          setMediaState({
+            source: mediaSource,
+            error: error instanceof Error ? error.message : "Matrix media could not be loaded.",
+          });
         }
       });
 
       return () => {
         isMounted = false;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
       };
     }
-  }, [fileUrl, mediaSource, mimeType, type]);
+  }, [safeFileUrl, mediaSource, mimeType, type, mediaAttempt]);
 
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -149,10 +167,15 @@ export function ChatBubble({
             <div className="flex flex-col gap-2.5">
               {content && <p className="mb-1">{content}</p>}
               <div className="overflow-hidden rounded-lg border border-border bg-black/20 max-w-xs sm:max-w-md min-h-[140px] max-h-72 flex items-center justify-center p-1">
-                {loadingMedia ? (
+                {mediaError ? (
+                  <div role="alert" className="px-3 py-6 text-center text-xs text-destructive">
+                    <p>{mediaError}</p>
+                    <button type="button" onClick={() => { setMediaState(null); setMediaAttempt((attempt) => attempt + 1); }} className="mt-2 font-semibold underline underline-offset-2">Retry media</button>
+                  </div>
+                ) : loadingMedia ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground py-8">
                     <Loader2 className="size-4 animate-spin text-primary" />
-                    <span>Decrypting media...</span>
+                    <span>Loading media…</span>
                   </div>
                 ) : resolvedUrl ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
@@ -178,9 +201,12 @@ export function ChatBubble({
                   {fileName || "Document.pdf"}
                 </span>
                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-                  {loadingMedia ? "Decrypting..." : "PDF Document"}
+                  {mediaError || (loadingMedia ? "Loading media…" : "PDF Document")}
                 </span>
               </div>
+              {mediaError && (
+                <button type="button" onClick={() => { setMediaState(null); setMediaAttempt((attempt) => attempt + 1); }} className="text-[10px] text-destructive underline underline-offset-2">Retry</button>
+              )}
               <a
                 href={resolvedUrl || "#"}
                 download={fileName || "document.pdf"}

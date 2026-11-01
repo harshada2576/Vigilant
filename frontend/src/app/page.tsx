@@ -38,18 +38,18 @@ export default function Home() {
         <div className="text-center space-y-6 max-w-3xl mx-auto relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider">
             <ShieldCheck className="size-4" />
-            Secure Corporate Messaging App
+            Matrix messaging workspace
           </div>
           
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.1] font-heading">
-            Secure corporate chat,{" "}
+            Matrix chat,{" "}
             <span className="bg-gradient-to-r from-primary via-violet-400 to-indigo-400 bg-clip-text text-transparent">
-              controlled by you.
+              connected to your homeserver.
             </span>
           </h1>
           
           <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Vigilant is a safe, secure, and private messaging application designed specifically for business teams. Keep your team's chats, documents, and corporate files strictly inside your company.
+            Sign in to a configured Matrix homeserver to view rooms and messages provided by your account.
           </p>
 
           <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -57,7 +57,7 @@ export default function Home() {
               href="/login"
               className="w-full sm:w-auto px-7 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/15"
             >
-              Access Demo Workspace
+              Sign In
               <ArrowRight className="size-4.5" />
             </Link>
             <Link
@@ -76,9 +76,9 @@ export default function Home() {
             <div className="size-10 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
               <Lock className="size-5.5" />
             </div>
-            <h3 className="font-heading font-bold text-base text-foreground">Total Privacy</h3>
+            <h3 className="font-heading font-bold text-base text-foreground">Matrix account</h3>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Every message and document is private. Only you and your approved team members can read them.
+              Room access and message visibility follow the homeserver and room configuration.
             </p>
           </div>
 
@@ -87,9 +87,9 @@ export default function Home() {
             <div className="size-10 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
               <Shield className="size-5.5" />
             </div>
-            <h3 className="font-heading font-bold text-base text-foreground">Company Ownership</h3>
+            <h3 className="font-heading font-bold text-base text-foreground">Homeserver data</h3>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Your messages stay on your own company servers. You retain complete control over your communication history.
+              The configured Matrix homeserver supplies the account&apos;s rooms and conversation history.
             </p>
           </div>
 
@@ -98,9 +98,9 @@ export default function Home() {
             <div className="size-10 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
               <CheckCircle2 className="size-5.5" />
             </div>
-            <h3 className="font-heading font-bold text-base text-foreground">Simple Setup</h3>
+            <h3 className="font-heading font-bold text-base text-foreground">Available actions</h3>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Create chat channels, share files, send pictures, and message your teammates instantly in a clean corporate workspace.
+              Available room and messaging actions depend on the installed Matrix bridge capabilities.
             </p>
           </div>
         </div>

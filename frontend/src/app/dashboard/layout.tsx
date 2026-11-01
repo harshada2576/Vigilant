@@ -8,13 +8,12 @@ import {
   LogOut, 
   Menu, 
   X, 
-  Wifi, 
-  WifiOff, 
   ChevronRight, 
   Lock,
   AlertCircle,
   Loader2,
-  Info
+  Info,
+  UserRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMatrixStore, Room, User } from "@/store/matrixStore";
@@ -24,6 +23,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SearchBar } from "@/components/ui/search-bar";
+import type { MatrixPresence } from "@/types/matrix";
 
 export default function DashboardLayout({
   children,
@@ -38,54 +38,100 @@ export default function DashboardLayout({
   const rooms = useMatrixStore((state) => state.rooms);
   const users = useMatrixStore((state) => state.users);
   const isConnecting = useMatrixStore((state) => state.isConnecting);
-  const isSynced = useMatrixStore((state) => state.isSynced);
   const connectionMode = useMatrixStore((state) => state.connectionMode);
-  const activeRoomId = useMatrixStore((state) => state.activeRoomId);
+  const connectionError = useMatrixStore((state) => state.connectionError);
   const setActiveRoomId = useMatrixStore((state) => state.setActiveRoomId);
 
   // Component states
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   const [createModalOpen, setCreateModalOpen] = React.useState(false);
   const [newRoomName, setNewRoomName] = React.useState("");
-  const [newRoomTopic, setNewRoomTopic] = React.useState("");
-  const [newRoomIsEncrypted, setNewRoomIsEncrypted] = React.useState(false);
+  const [createRoomError, setCreateRoomError] = React.useState("");
+  const [isCreatingRoom, setIsCreatingRoom] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [showStatusDropdown, setShowStatusDropdown] = React.useState(false);
   const [startDmModalOpen, setStartDmModalOpen] = React.useState(false);
   const [targetDmInput, setTargetDmInput] = React.useState("");
   const [dmError, setDmError] = React.useState("");
   const [searchResults, setSearchResults] = React.useState<User[]>([]);
+  const [directoryError, setDirectoryError] = React.useState("");
+  const [statusError, setStatusError] = React.useState("");
   const [isSearching, setIsSearching] = React.useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
   const [showSyncInfoModal, setShowSyncInfoModal] = React.useState(false);
   const [authChecked, setAuthChecked] = React.useState(false);
+  const [isStartingDm, setIsStartingDm] = React.useState(false);
+  const [selectedDirectoryUser, setSelectedDirectoryUser] = React.useState<User | null>(null);
+  const [profilePresenceLookup, setProfilePresenceLookup] = React.useState<{
+    userId: string;
+    status?: User["status"];
+    presence?: MatrixPresence;
+    statusMessage?: string;
+    error?: string;
+    loading: boolean;
+  } | null>(null);
+  const profilePresenceRequestRef = React.useRef(0);
+
+  const openDirectoryProfile = (user: User) => {
+    profilePresenceRequestRef.current += 1;
+    setSelectedDirectoryUser(user);
+    setProfilePresenceLookup({ userId: user.id, loading: false });
+  };
+
+  const closeDirectoryProfile = () => {
+    profilePresenceRequestRef.current += 1;
+    setSelectedDirectoryUser(null);
+  };
+
+  const loadProfilePresence = async () => {
+    const user = selectedDirectoryUser;
+    if (!user || profilePresenceLookup?.loading) return;
+    const requestId = ++profilePresenceRequestRef.current;
+    setProfilePresenceLookup({ userId: user.id, loading: true });
+    try {
+      const snapshot = await matrixService.getUserPresence(user.id);
+      if (profilePresenceRequestRef.current === requestId) {
+        setProfilePresenceLookup({ userId: user.id, ...snapshot, loading: false });
+      }
+    } catch (error) {
+      if (profilePresenceRequestRef.current === requestId) {
+        setProfilePresenceLookup({ userId: user.id, error: error instanceof Error ? error.message : "Matrix presence could not be loaded.", loading: false });
+      }
+    }
+  };
 
   // Debounced homeserver user directory search
   React.useEffect(() => {
     if (!startDmModalOpen) {
-      setSearchResults([]);
       return;
     }
+    let active = true;
     const timer = setTimeout(async () => {
       setIsSearching(true);
+      setDirectoryError("");
       try {
         const results = await matrixService.searchUsers(targetDmInput);
+        if (!active) return;
         setSearchResults(
           results.filter(
             (u) =>
               u.id.toLowerCase() !== currentUser?.id?.toLowerCase() &&
-              u.email.toLowerCase() !== currentUser?.email?.toLowerCase() &&
               u.name.toLowerCase() !== currentUser?.name?.toLowerCase()
           )
         );
-      } catch {
+      } catch (error) {
+        if (!active) return;
         setSearchResults([]);
+        setDirectoryError(error instanceof Error ? error.message : "Matrix user search failed.");
       } finally {
-        setIsSearching(false);
+        if (active) setIsSearching(false);
       }
     }, 200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [targetDmInput, startDmModalOpen, currentUser]);
 
   // Initialize service
@@ -93,18 +139,19 @@ export default function DashboardLayout({
     matrixService.init();
   }, []);
 
+  React.useEffect(() => () => { profilePresenceRequestRef.current += 1; }, []);
+
   // Check auth and redirect smoothly
   React.useEffect(() => {
-    if (currentUser) {
-      setAuthChecked(true);
-      return;
-    }
     const timer = setTimeout(() => {
       const state = useMatrixStore.getState();
-      const sessionUser = typeof window !== "undefined" ? sessionStorage.getItem("vigilant_user") : null;
-      if (!state.currentUser && !sessionUser && !state.isConnecting) {
-        router.push("/login");
-      } else {
+      if (!state.currentUser && !state.isConnecting) {
+        if (state.connectionMode === "error") {
+          setAuthChecked(true);
+        } else {
+          router.push("/login");
+        }
+      } else if (state.currentUser) {
         setAuthChecked(true);
       }
     }, 400);
@@ -112,59 +159,54 @@ export default function DashboardLayout({
     return () => clearTimeout(timer);
   }, [currentUser, isConnecting, router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutConfirm(false);
-    matrixService.logout();
-    window.location.href = "/";
+    try {
+      await matrixService.logout();
+      window.location.href = "/";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Logout could not be confirmed by Matrix.";
+      useMatrixStore.getState().setConnectionMode("error");
+      useMatrixStore.getState().setConnectionError({ phase: "auth", message, retryable: false });
+    }
   };
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoomName.trim()) return;
-
-    const newRoom = await matrixService.createRoom(
-      newRoomName,
-      "channel",
-      newRoomTopic,
-      newRoomIsEncrypted
-    );
-
-    // Reset create variables
-    setNewRoomName("");
-    setNewRoomTopic("");
-    setNewRoomIsEncrypted(false);
-    setCreateModalOpen(false);
-
-    // Direct user to the new room
-    setActiveRoomId(newRoom.id);
-    router.push(`/dashboard/c/${newRoom.id}`);
+    if (!newRoomName.trim() || isCreatingRoom) return;
+    setIsCreatingRoom(true);
+    setCreateRoomError("");
+    try {
+      const newRoom = await matrixService.createRoom(newRoomName, "channel");
+      setNewRoomName("");
+      setCreateModalOpen(false);
+      setActiveRoomId(newRoom.id);
+      router.push(`/dashboard/c/${newRoom.id}`);
+    } catch (error) {
+      setCreateRoomError(error instanceof Error ? error.message : "Matrix could not create this room.");
+    } finally {
+      setIsCreatingRoom(false);
+    }
   };
 
   const handleStartDM = async (e?: React.FormEvent, selectedUser?: string) => {
     e?.preventDefault();
     const queryName = (selectedUser || targetDmInput).trim();
-    if (!queryName) return;
+    if (!queryName || isStartingDm) return;
 
     setDmError("");
     const cleanQuery = queryName.replace("#", "").trim().toLowerCase();
 
     const targetObj = users.find(
       (u) =>
-        u.email.toLowerCase() === cleanQuery ||
-        u.name.toLowerCase() === cleanQuery ||
-        u.id.toLowerCase() === cleanQuery ||
-        u.id.toLowerCase().startsWith(`@${cleanQuery}:`)
+        u.id.toLowerCase() === cleanQuery
     );
 
     const targetInput = targetObj ? targetObj.id : queryName;
 
+    setIsStartingDm(true);
     try {
-      const dmRoom = await matrixService.createRoom(
-        targetInput,
-        "dm",
-        "",
-        true
-      );
+      const dmRoom = await matrixService.createRoom(targetInput, "dm");
       setTargetDmInput("");
       setDmError("");
       setStartDmModalOpen(false);
@@ -172,13 +214,20 @@ export default function DashboardLayout({
       router.push(`/dashboard/dm/${dmRoom.id}`);
     } catch (err) {
       console.error("Failed to start DM:", err);
-      setDmError("Failed to open DM with the selected user.");
+      setDmError(err instanceof Error ? err.message : "Failed to open a Matrix direct message.");
+    } finally {
+      setIsStartingDm(false);
     }
   };
 
-  const changeStatus = (status: User["status"]) => {
+  const changeStatus = async (status: User["status"]) => {
     if (currentUser && status) {
-      matrixService.setUserPresence(status);
+      setStatusError("");
+      try {
+        await matrixService.setUserPresence(status);
+      } catch (error) {
+        setStatusError(error instanceof Error ? error.message : "Could not update Matrix presence.");
+      }
     }
     setShowStatusDropdown(false);
   };
@@ -197,14 +246,10 @@ export default function DashboardLayout({
       return getDMDisplayName(room).toLowerCase().includes(q);
     });
 
-    // Deduplicate by target member ID or email (preserves distinct users even if they share a first name)
+    // Prefer the exact peer ID when the bridge provides it.
     const seenTargets = new Set<string>();
     return matching.filter((room) => {
-      const currentId = currentUser?.id?.toLowerCase() || "";
-      const currentEmail = currentUser?.email?.toLowerCase() || "";
-      const targetMember = room.members.find(
-        (m) => m.toLowerCase() !== currentId && m.toLowerCase() !== currentEmail
-      ) || room.id;
+      const targetMember = room.directUserId?.toLowerCase() || room.id;
 
       if (seenTargets.has(targetMember.toLowerCase())) return false;
       seenTargets.add(targetMember.toLowerCase());
@@ -214,98 +259,21 @@ export default function DashboardLayout({
   }, [rooms, searchQuery, currentUser, users]);
 
   function getDMDisplayName(room: Room) {
-    const currentClean = (currentUser?.name || "").toLowerCase();
-    const currentIdClean = (currentUser?.id || "").toLowerCase();
-    const currentEmailClean = (currentUser?.email || "").toLowerCase();
-
-    const otherMember = room.members.find(
-      (m) =>
-        m.toLowerCase() !== currentClean &&
-        m.toLowerCase() !== currentIdClean &&
-        m.toLowerCase() !== currentEmailClean
-    ) || room.name;
-
-    const rawMember = otherMember.trim();
-    const cleanMember = rawMember.toLowerCase();
-    const username = cleanMember.split(":")[0].replace("@", "").toLowerCase();
-
-    // 1. Check in-memory users in Zustand store
-    const matchUser = users.find((u) => {
-      const uId = u.id.toLowerCase();
-      const uEmail = u.email.toLowerCase();
-      const uUsername = u.email.split("@")[0].toLowerCase();
-
-      return (
-        uId === cleanMember ||
-        uEmail === cleanMember ||
-        cleanMember === uUsername ||
-        cleanMember.startsWith(`@${uUsername}:`) ||
-        cleanMember === uId
-      );
-    });
+    const targetUserId = room.directUserId || room.members.find(
+      (member) => member.toLowerCase() !== currentUser?.id.toLowerCase()
+    );
+    const matchUser = targetUserId && users.find((user) => user.id.toLowerCase() === targetUserId.toLowerCase());
     if (matchUser) return matchUser.name;
-
-    // 2. Check localStorage registered users & user map (shared across all tabs)
-    if (typeof window !== "undefined") {
-      try {
-        const regUsers: User[] = JSON.parse(
-          localStorage.getItem("vigilant_registered_users") || "[]"
-        );
-        const regMatch = regUsers.find((u) => {
-          const uId = u.id.toLowerCase();
-          const uEmail = u.email.toLowerCase();
-          const uUsername = u.email.split("@")[0].toLowerCase();
-          return (
-            uId === cleanMember ||
-            uEmail === cleanMember ||
-            username === uUsername ||
-            cleanMember.startsWith(`@${uUsername}:`)
-          );
-        });
-        if (regMatch) return regMatch.name;
-
-        const userMap = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
-        if (userMap[cleanMember]) return userMap[cleanMember];
-        if (userMap[username]) return userMap[username];
-        if (userMap[rawMember]) return userMap[rawMember];
-      } catch (e) {}
-    }
-
-    if (username.length > 0 && !username.startsWith("!")) {
-      return username.charAt(0).toUpperCase() + username.slice(1);
-    }
-    return room.name;
+    if (room.name !== room.id) return room.name;
+    const localpart = targetUserId?.startsWith("@") ? targetUserId.slice(1).split(":")[0] : "";
+    return localpart || room.name;
   }
 
   function getDMDisplayStatus(room: Room) {
-    const currentClean = (currentUser?.name || "").toLowerCase();
-    const currentIdClean = (currentUser?.id || "").toLowerCase();
-    const currentEmailClean = (currentUser?.email || "").toLowerCase();
-
-    const otherMember = room.members.find(
-      (m) =>
-        m.toLowerCase() !== currentClean &&
-        m.toLowerCase() !== currentIdClean &&
-        m.toLowerCase() !== currentEmailClean
-    ) || room.name;
-
-    const cleanMember = otherMember.replace("#", "").trim().toLowerCase();
-
-    const matchUser = users.find((u) => {
-      const uId = u.id.toLowerCase();
-      const uEmail = u.email.toLowerCase();
-      const uUsername = u.email.split("@")[0].toLowerCase();
-
-      return (
-        uId === cleanMember ||
-        uEmail === cleanMember ||
-        cleanMember === uUsername ||
-        cleanMember.startsWith(`@${uUsername}:`) ||
-        cleanMember === uId
-      );
-    });
-
-    return matchUser ? matchUser.status : "online";
+    const targetUserId = room.directUserId || room.members.find(
+      (member) => member.toLowerCase() !== currentUser?.id.toLowerCase()
+    );
+    return users.find((user) => user.id.toLowerCase() === targetUserId?.toLowerCase())?.status;
   }
 
   if (!currentUser && isConnecting) {
@@ -321,7 +289,33 @@ export default function DashboardLayout({
     );
   }
 
-  const SidebarContent = () => (
+  if (!currentUser && authChecked && connectionMode === "error") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
+        <div className="w-full max-w-md space-y-4 rounded-xl border border-border bg-card/30 p-6">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="size-5" />
+            <h1 className="font-semibold">{connectionError?.phase === "auth" ? "Matrix session unavailable" : "Matrix session could not be restored"}</h1>
+          </div>
+          <p role="alert" className="text-sm text-muted-foreground">
+            {connectionError?.message || "Check the Matrix homeserver configuration, then retry or sign in."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {connectionError?.retryable && (
+              <Button variant="outline" onClick={() => void matrixService.init()}>
+                Retry session restore
+              </Button>
+            )}
+            <Button variant="default" onClick={() => router.push("/login")}>
+              Go to sign in
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const renderSidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border select-none">
       {/* Workspace Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border">
@@ -334,17 +328,17 @@ export default function DashboardLayout({
               Vigilant HQ
             </span>
             <span className="text-xs text-muted-foreground">
-              {currentUser?.email.split("@")[1] || "localhost"}
+              {currentUser?.id.split(":")[1] || "Matrix homeserver"}
             </span>
           </div>
         </div>
 
         {/* Server Sync status badge */}
         <div className="flex items-center">
-          {connectionMode === "wasm" ? (
+          {connectionMode === "authenticated" ? (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Live Synapse</span>
+              <span className="size-2 rounded-full bg-emerald-400" />
+              <span>Signed in · Sync unknown</span>
             </div>
           ) : connectionMode === "connecting" ? (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
@@ -358,7 +352,7 @@ export default function DashboardLayout({
               title="Click for Connection Details"
             >
               <span className="size-2 rounded-full bg-primary" />
-              <span>Simulation Mode</span>
+              <span>{connectionMode === "error" ? "Connection error" : "Disconnected"}</span>
             </button>
           )}
         </div>
@@ -416,7 +410,7 @@ export default function DashboardLayout({
                       <span className="truncate">{room.name}</span>
                     </div>
 
-                    {room.unreadCount > 0 ? (
+                    {(room.unreadCount ?? 0) > 0 ? (
                       <span className="px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
                         {room.unreadCount}
                       </span>
@@ -475,7 +469,7 @@ export default function DashboardLayout({
                       <span className="truncate">{getDMDisplayName(room)}</span>
                     </div>
 
-                    {room.unreadCount > 0 ? (
+                    {(room.unreadCount ?? 0) > 0 ? (
                       <span className="px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
                         {room.unreadCount}
                       </span>
@@ -499,7 +493,6 @@ export default function DashboardLayout({
           >
             <Avatar
               name={currentUser?.name || "User"}
-              status={currentUser?.status || "online"}
               size="md"
               className="border border-border/80 group-hover:border-primary/50 transition-colors"
             />
@@ -508,7 +501,7 @@ export default function DashboardLayout({
                 {currentUser?.name}
               </span>
               <span className="text-xs text-muted-foreground truncate uppercase tracking-wider font-semibold">
-                {currentUser?.status || "online"}
+                {currentUser?.status ? `Last update accepted: ${currentUser.status}` : "Presence not checked"}
               </span>
             </div>
           </div>
@@ -523,6 +516,10 @@ export default function DashboardLayout({
             </button>
           </div>
         </div>
+
+        {statusError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">{statusError}</p>
+        )}
 
         {/* User Presence Status Dropdown */}
         {showStatusDropdown && (
@@ -573,7 +570,7 @@ export default function DashboardLayout({
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-64 shrink-0 h-full">
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
 
       {/* Main Panel Area */}
@@ -591,8 +588,10 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background border border-border">
-            <Wifi className="size-4 text-emerald-500" />
-            <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Synced</span>
+            <span className={cn("size-2 rounded-full", connectionMode === "authenticated" ? "bg-emerald-500" : connectionMode === "connecting" ? "bg-amber-500" : "bg-zinc-500")} />
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              {connectionMode === "authenticated" ? "Signed in · Sync unknown" : connectionMode === "connecting" ? "Connecting" : connectionMode === "error" ? "Connection error" : "Disconnected"}
+            </span>
           </div>
         </header>
 
@@ -617,7 +616,7 @@ export default function DashboardLayout({
               >
                 <X className="size-4" />
               </button>
-              <SidebarContent />
+              {renderSidebarContent()}
             </div>
           </div>
         )}
@@ -633,13 +632,14 @@ export default function DashboardLayout({
             <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="default" onClick={handleCreateRoom}>
-              Create Channel
+            <Button variant="default" type="submit" form="create-channel-form" disabled={isCreatingRoom}>
+              {isCreatingRoom ? "Creating…" : "Create Channel"}
             </Button>
           </>
         }
       >
-        <form onSubmit={handleCreateRoom} className="space-y-4 font-sans">
+        <form id="create-channel-form" onSubmit={handleCreateRoom} className="space-y-4 font-sans">
+          {createRoomError && <p role="alert" className="text-xs text-destructive">{createRoomError}</p>}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-foreground/90">
               Channel Name
@@ -654,36 +654,7 @@ export default function DashboardLayout({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground/90">
-              Topic (Optional)
-            </label>
-            <Input
-              type="text"
-              placeholder="Enter channel topic"
-              value={newRoomTopic}
-              onChange={(e) => setNewRoomTopic(e.target.value)}
-              className="h-10 text-sm"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/20">
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                <Lock className="size-4 text-primary" />
-                Enable E2E Encryption
-              </span>
-              <span className="text-xs text-muted-foreground max-w-[240px] mt-0.5">
-                Encrypt messages with Megolm group keys. Synapse servers will only see ciphertext.
-              </span>
-            </div>
-            <input
-              type="checkbox"
-              checked={newRoomIsEncrypted}
-              onChange={(e) => setNewRoomIsEncrypted(e.target.checked)}
-              className="accent-primary size-4.5 cursor-pointer"
-            />
-          </div>
+          <p className="text-xs text-muted-foreground">The installed Matrix bridge creates a named room. Topic and encryption controls are unavailable in this bridge version.</p>
         </form>
       </Modal>
 
@@ -700,27 +671,27 @@ export default function DashboardLayout({
             <Button variant="outline" onClick={() => setStartDmModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="default" onClick={(e) => handleStartDM(e)}>
-              Open Chat
+            <Button variant="default" type="button" disabled={isStartingDm} onClick={() => handleStartDM()}>
+              {isStartingDm ? "Opening…" : "Open Chat"}
             </Button>
           </>
         }
       >
         <form onSubmit={handleStartDM} className="space-y-4 font-sans">
-          {dmError && (
+          {(dmError || directoryError) && (
             <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-xs font-semibold text-destructive flex items-center gap-2">
               <AlertCircle className="size-4 shrink-0" />
-              <span>{dmError}</span>
+              <span>{dmError || directoryError}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-foreground/90">
-              Select or Type Registered Username / Email
+              Search Matrix users or enter an exact Matrix user ID
             </label>
             <Input
               type="text"
-              placeholder="e.g. Harshada or Rushikesh"
+              placeholder="@username:server.org"
               value={targetDmInput}
               onChange={(e) => {
                 setTargetDmInput(e.target.value);
@@ -734,7 +705,7 @@ export default function DashboardLayout({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Directory Results (Homeserver & Local)
+                Matrix Directory Results
               </span>
               {isSearching && (
                 <div className="flex items-center gap-1.5 text-xs text-primary animate-pulse font-medium">
@@ -757,27 +728,23 @@ export default function DashboardLayout({
                 </div>
               ) : (
                 searchResults.map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => {
-                      setTargetDmInput(u.id);
-                      setDmError("");
-                      handleStartDM(undefined, u.id);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted text-left transition-colors font-medium text-sm group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Avatar name={u.name} status={u.status} size="sm" />
-                      <div className="flex flex-col min-w-0">
+                  <div key={u.id} className="w-full flex items-center gap-1 px-2 py-2 rounded-md hover:bg-muted text-sm">
+                    <button
+                      type="button"
+                      onClick={() => handleStartDM(undefined, u.id)}
+                      disabled={isStartingDm}
+                      className="flex-1 min-w-0 flex items-center gap-2.5 text-left"
+                    >
+                      <Avatar name={u.name} src={u.avatarUrl} status={u.status} size="sm" />
+                      <span className="flex flex-col min-w-0">
                         <span className="font-semibold text-foreground truncate">{u.name}</span>
                         <span className="text-[10px] text-muted-foreground truncate">{u.id}</span>
-                      </div>
-                    </div>
-                    <span className="text-xs text-primary font-semibold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      Chat →
-                    </span>
-                  </button>
+                      </span>
+                    </button>
+                    <button type="button" aria-label={`View available profile details for ${u.id}`} onClick={() => openDirectoryProfile(u)} className="p-2 rounded hover:bg-background text-muted-foreground" title="Profile details">
+                      <UserRound className="size-4" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -802,7 +769,7 @@ export default function DashboardLayout({
         }
       >
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Are you sure you want to sign out of Vigilant on this device? Your local session will be securely cleared.
+          Are you sure you want to sign out of this Matrix account on this device? The local session will be cleared; the bridge will also request a remote Matrix logout.
         </p>
       </Modal>
 
@@ -812,31 +779,63 @@ export default function DashboardLayout({
         onClose={() => setShowSyncInfoModal(false)}
         title="Connection Architecture Status"
         footer={
-          <Button variant="default" onClick={() => setShowSyncInfoModal(false)}>
-            Understood
-          </Button>
+          <>
+            {connectionMode === "error" && connectionError?.retryable && (
+              <Button variant="outline" onClick={() => void matrixService.init()}>
+                Retry connection
+              </Button>
+            )}
+            <Button variant="default" onClick={() => setShowSyncInfoModal(false)}>
+              Close
+            </Button>
+          </>
         }
       >
         <div className="space-y-4 text-sm text-muted-foreground font-sans">
           <div className="p-3 rounded-lg border border-primary/25 bg-primary/10 text-foreground flex items-start gap-2.5">
             <Info className="size-5 text-primary shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <span className="font-semibold text-xs uppercase tracking-wide text-primary">Simulation Fallback Active</span>
+              <span className="font-semibold text-xs uppercase tracking-wide text-primary">
+                {connectionMode === "authenticated" ? "Authenticated · Sync status unknown" : connectionMode === "error" ? "Matrix connection failed" : "Disconnected from Matrix"}
+              </span>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                The application is running in local high-fidelity simulation mode with cross-tab event synchronization. All messages, channels, and simulated encryption work seamlessly across browser tabs.
+                {connectionMode === "authenticated"
+                  ? "The bridge restored an authenticated Matrix session. This bridge version does not report sync connection state, so live synchronization cannot be confirmed."
+                  : connectionError?.message || (connectionMode === "error"
+                    ? "The Matrix session could not be restored. Check the homeserver configuration and retry."
+                    : "Vigilant is not connected to a Matrix homeserver. Sign in to restore a valid Matrix session.")}
               </p>
             </div>
           </div>
           <div className="space-y-2">
-            <h4 className="font-bold text-foreground text-xs uppercase tracking-wider">To connect to a live Matrix Synapse Homeserver:</h4>
-            <pre className="p-3 rounded-lg bg-black/40 border border-border text-xs text-foreground font-mono overflow-x-auto">
-              docker compose up -d
-            </pre>
-            <p className="text-xs">
-              When the Synapse server responds on port 8008, the Rust WebAssembly client automatically transitions to <strong className="text-emerald-400">Live Synapse</strong> mode.
-            </p>
+            <h4 className="font-bold text-foreground text-xs uppercase tracking-wider">Connection status</h4>
+            <p className="text-xs">Authentication is confirmed by a successful bridge session restore. A sync callback is not present in the installed bridge API.</p>
           </div>
         </div>
+      </Modal>
+      <Modal isOpen={Boolean(selectedDirectoryUser)} onClose={closeDirectoryProfile} title="Matrix user profile">
+        {selectedDirectoryUser && (
+          <div className="flex items-center gap-3">
+            <Avatar name={selectedDirectoryUser.name} src={selectedDirectoryUser.avatarUrl} status={profilePresenceLookup?.userId === selectedDirectoryUser.id ? profilePresenceLookup.status : undefined} size="lg" />
+            <div className="min-w-0">
+              <p className="font-semibold text-foreground">{selectedDirectoryUser.name}</p>
+              <p className="text-xs break-all">{selectedDirectoryUser.id}</p>
+              <p className="text-xs mt-2">
+                {profilePresenceLookup?.userId !== selectedDirectoryUser.id || profilePresenceLookup.loading
+                  ? "Presence has not been loaded."
+                  : profilePresenceLookup.error
+                    ? "Presence unavailable because the lookup failed."
+                    : `Matrix presence: ${profilePresenceLookup.presence || "unknown"}${profilePresenceLookup.status ? ` (${profilePresenceLookup.status})` : ""}`}
+              </p>
+              {profilePresenceLookup?.statusMessage && <p className="text-xs mt-1">{profilePresenceLookup.statusMessage}</p>}
+              <p className="text-xs mt-1">Additional profile fields are unavailable in the installed bridge.</p>
+              {profilePresenceLookup?.error && <p role="alert" className="text-xs text-destructive mt-1">{profilePresenceLookup.error}</p>}
+              <Button variant="outline" size="sm" className="mt-3" disabled={profilePresenceLookup?.loading} onClick={() => void loadProfilePresence()}>
+                {profilePresenceLookup?.loading ? "Loading presence…" : "Load current presence"}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

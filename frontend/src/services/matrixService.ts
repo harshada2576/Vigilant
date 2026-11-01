@@ -2,429 +2,273 @@
  * matrixService.ts
  *
  * Frontend integration layer for @seucra/matrix-sdk-bridge (WebAssembly).
- * Follows the Vigilant Matrix SDK Bridge API Reference (Backend Cycle 1 · v0.1).
+ * Uses only APIs present in the installed @seucra/matrix-sdk-bridge declarations.
  *
- * Key API contract notes from the docs:
- * - register(username, password): Creates and AUTOMATICALLY authenticates the session.
- *   Do NOT call login() after register() — the bridge is already authenticated.
- * - login(username, password): Authenticates an existing account.
- * - export_session() / restore_session(): Used for session persistence across reloads.
- * - Callbacks (on_message, on_notification) must be registered BEFORE start_sync().
+ * Matrix/Synapse is authoritative. Most calls use the WASM bridge; directory
+ * search and presence are explicit temporary HTTP exceptions because 0.1.4
+ * has no corresponding exports. sessionStorage stores only the bridge session.
  */
 
 import { useMatrixStore, User, Room, Message } from "../store/matrixStore";
 import type { MatrixBridge } from "@seucra/matrix-sdk-bridge";
+import type { MatrixPresenceSnapshot } from "../types/matrix";
+import {
+  displayStatusForPresence,
+  isMatrixRoomId,
+  isMatrixUserId,
+  mediaBytesMatchMime,
+  normalizeDirectoryResponse,
+  normalizeMessageEvent,
+  normalizePresenceResponse,
+  parseDirectMessages,
+  parseHistoryResponse,
+  parseJoinedRooms,
+  safeMediaMime,
+  stableMessageId,
+} from "./matrixPayload.mjs";
 
 let bridgeInstance: MatrixBridge | null = null;
+let bridgeInitialization: Promise<MatrixBridge> | null = null;
+let bridgeInitializationGeneration = 0;
+const bridgesWithCallbacks = new WeakSet<MatrixBridge>();
 
-// Default workspace channels (no mock users, no mock messages — Synapse is authoritative)
-const DEFAULT_CHANNELS: Room[] = [
-  {
-    id: "room_general",
-    name: "general",
-    topic: "Company-wide discussions and watercooler talk",
-    type: "channel",
-    unreadCount: 0,
-    members: [],
-    isEncrypted: false,
-    createdAt: Date.now() - 86400000 * 5,
-  },
-  {
-    id: "room_announcements",
-    name: "announcements",
-    topic: "Important announcements and policy updates",
-    type: "channel",
-    unreadCount: 0,
-    members: [],
-    isEncrypted: false,
-    createdAt: Date.now() - 86400000 * 10,
-  },
-  {
-    id: "room_security",
-    name: "security-compliance 🔒",
-    topic: "E2E Encrypted channel for secure audits, keys and key escrow discussion",
-    type: "channel",
-    unreadCount: 0,
-    members: [],
-    isEncrypted: true,
-    createdAt: Date.now() - 86400000 * 3,
-  },
-];
+function bridgeInitializationPhase(error: unknown): "wasm" | "homeserver" {
+  const message = error instanceof Error ? error.message : String(error);
+  return /WASM|bridge package/i.test(message) ? "wasm" : "homeserver";
+}
 
-/**
- * Validate that an email is syntactically valid — any domain is allowed.
- */
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+function configuredHomeserverUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_HOMESERVER_URL?.trim();
+  if (!configured) {
+    throw new Error("Set NEXT_PUBLIC_HOMESERVER_URL to your Matrix homeserver before signing in.");
+  }
+  try {
+    const url = new URL(configured);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error();
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    throw new Error("NEXT_PUBLIC_HOMESERVER_URL must be a valid HTTP or HTTPS URL.");
+  }
+}
+
+/** The bridge accepts a homeserver-local username, not an email or full MXID. */
+function matrixUsernameFromInput(input: string): string {
+  const value = input.trim();
+  if (isMatrixUserId(value)) return value.slice(1, value.indexOf(":"));
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return value.slice(0, value.indexOf("@"));
+  if (/^[a-z0-9._=/-]+$/i.test(value)) return value;
+  throw new Error("Enter a Matrix username, account email-style username, or full Matrix user ID.");
 }
 
 /**
  * Lazy-loads and initialises the WASM bridge singleton.
  *
- * Matches the Vigilant Matrix SDK Bridge integration guide §2 exactly:
- *   - Throws on SSR (window === undefined).
- *   - Throws on any WASM / homeserver init failure.
- * Callers should wrap in try/catch so local-fallback logic can activate.
+ * - Throws on SSR (window === undefined).
+ * - Throws on any WASM / homeserver init failure.
+ *
+ * Callers must handle errors and surface them to the UI.
+ * No local fallback is permitted.
  */
 async function getBridgeInstance(): Promise<MatrixBridge> {
   if (typeof window === "undefined") {
     throw new Error("Matrix WASM bridge can only run in the browser.");
   }
   if (bridgeInstance) return bridgeInstance;
-
-  // 1. Dynamically import the generated JS module
-  const wasm = await import("@seucra/matrix-sdk-bridge");
-  // 2. Load the WASM binary from /public (copied there by the postinstall script)
-  await wasm.default("/matrix_sdk_bridge_bg.wasm");
-  // 3. Connect to Synapse
-  const homeserverUrl = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
-  console.log("[MatrixBridge] Initializing → targeting homeserver:", homeserverUrl);
-  bridgeInstance = await wasm.MatrixBridge.init(homeserverUrl);
-  return bridgeInstance;
+  if (!bridgeInitialization) {
+    const generation = bridgeInitializationGeneration;
+    const initialization = (async () => {
+      const homeserverUrl = configuredHomeserverUrl();
+      let wasm: typeof import("@seucra/matrix-sdk-bridge");
+      try {
+        wasm = await import("@seucra/matrix-sdk-bridge");
+      } catch (error) {
+        throw new Error(`WASM bridge package could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      try {
+        await wasm.default("/matrix_sdk_bridge_bg.wasm");
+      } catch (error) {
+        throw new Error(`WASM initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      let bridge: MatrixBridge;
+      try {
+        bridge = await wasm.MatrixBridge.init(homeserverUrl);
+      } catch (error) {
+        throw new Error(`Matrix homeserver initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (bridgeInitializationGeneration !== generation) {
+        bridge.stop_sync();
+        throw new Error("Matrix bridge initialization was cancelled by logout.");
+      }
+      bridgeInstance = bridge;
+      return bridge;
+    })().catch((error) => {
+      if (bridgeInitializationGeneration === generation) bridgeInitialization = null;
+      throw error;
+    });
+    bridgeInitialization = initialization;
+  }
+  return bridgeInitialization;
 }
 
 // ---------------------------------------------------------------------------
 
 class MatrixService {
   private isInitialised = false;
-  private crossTabSyncCleanup: (() => void) | null = null;
+  private authGeneration = 0;
+
+  private ensureCurrentOperation(generation: number): void {
+    if (generation !== this.authGeneration) throw new Error("This Matrix session operation was cancelled.");
+  }
+
+  private requireAuthenticatedBridge(): MatrixBridge {
+    if (!useMatrixStore.getState().currentUser || !bridgeInstance) {
+      throw new Error("An authenticated Matrix session is required for this operation.");
+    }
+    return bridgeInstance;
+  }
+
+  private async persistSession(session: string, bridge: MatrixBridge): Promise<void> {
+    try {
+      sessionStorage.setItem("matrix_session", session);
+    } catch {
+      bridge.stop_sync();
+      try {
+        await bridge.logout();
+      } catch {
+        throw new Error("Matrix signed in, but this browser could not save the session or complete remote logout. Clear this tab's session and sign in again.");
+      }
+      throw new Error("Matrix signed in, but this browser could not save the session. Enable session storage and sign in again.");
+    }
+  }
 
   /**
    * Called once on dashboard mount.
-   * Restores session from SESSIONSTORAGE (tab-scoped — each tab has its own user).
-   * Uses localStorage only for shared data: registered users, rooms, messages.
+   * Restores a legitimate Matrix session from sessionStorage if one exists.
+   * If restoration fails, retains the session so a transient network failure can be retried.
+   * No local fallback — all state must originate from Synapse.
    */
   async init() {
     if (typeof window === "undefined" || this.isInitialised) return;
     this.isInitialised = true;
+    const generation = this.authGeneration;
 
     const store = useMatrixStore.getState();
+    store.setConnectionMode("connecting");
+    store.setSyncStatus("initializing");
+    store.setConnectionError(null);
     store.setConnecting(true);
 
     try {
-      // ✅ sessionStorage is TAB-SCOPED — Tab 1 and Tab 2 never share this key
-      const savedUserJson = sessionStorage.getItem("vigilant_user");
-      if (!savedUserJson) {
+      // Tab-scoped — each tab has its own authenticated user
+      const savedSession = sessionStorage.getItem("matrix_session");
+      if (!savedSession) {
         store.setConnecting(false);
+        store.setConnectionMode("disconnected");
+        store.setSyncStatus("disconnected");
         return;
       }
 
-      const currentUser: User = JSON.parse(savedUserJson);
-      store.setCurrentUser(currentUser);
-      this.hydrateLocalData(store);
-
-      // Start cross-tab user list sync (picks up newly registered users in other tabs)
-      this.startCrossTabSync(store);
-
-      // ✅ matrix_session is also tab-scoped
-      const savedSession = sessionStorage.getItem("matrix_session");
-
-      if (savedSession) {
-        try {
-          const bridge = await getBridgeInstance();
-          console.log("[MatrixBridge] Restoring session…");
-          await bridge.restore_session(savedSession);
-          // Register callbacks before sync (per API lifecycle doc)
-          this.registerCallbacks(bridge, store);
-          bridge.start_sync();
-          await this.fetchRoomsFromBridge(bridge, store);
-          store.setConnectionMode("wasm");
-        } catch (e) {
-          console.warn("[MatrixBridge] Session restore failed, using local state:", e);
-          // Clear corrupted session
-          sessionStorage.removeItem("matrix_session");
-          store.setConnectionMode("local");
-        }
-      } else {
-        store.setConnectionMode("local");
-      }
-
-      store.setSynced(true);
-    } catch (error) {
-      console.error("[MatrixService] init error:", error);
-      store.setConnectionMode("local");
-    } finally {
-      store.setConnecting(false);
-    }
-  }
-
-  /**
-   * Listen for cross-tab localStorage changes:
-   * - vigilant_registered_users: another tab registered a new user → update users list live
-   * - vigilant_shared_messages_*: another tab/user sent a message → handled by syncRoomMessages
-   */
-  /**
-   * Listen for cross-tab localStorage changes:
-   * - vigilant_registered_users: another tab registered a new user → update users list live
-   * - vigilant_shared_rooms: another tab/user created a DM with current user → hydrate rooms live
-   * - vigilant_shared_messages_*: another tab/user sent a message → sync room messages live
-   */
-  private startCrossTabSync(store: any) {
-    const handler = (event: StorageEvent) => {
-      if (event.key === "vigilant_registered_users" && event.newValue) {
-        try {
-          const updatedUsers: User[] = JSON.parse(event.newValue);
-          const currentUser = store.currentUser as User | null;
-          const allUsers = updatedUsers.some(
-            (u) => u.email.toLowerCase() === currentUser?.email?.toLowerCase()
-          )
-            ? updatedUsers
-            : currentUser
-            ? [...updatedUsers, currentUser]
-            : updatedUsers;
-          useMatrixStore.getState().setUsers(allUsers);
-        } catch (e) {}
-      }
-
-      if (event.key === "vigilant_shared_rooms" && event.newValue) {
-        try {
-          const liveStore = useMatrixStore.getState();
-          if (liveStore.currentUser) {
-            this.hydrateLocalData(liveStore);
-          }
-        } catch (e) {}
-      }
-
-      if (event.key?.startsWith("vigilant_shared_messages_")) {
-        const roomId = event.key.replace("vigilant_shared_messages_", "");
-        if (roomId) {
-          this.syncRoomMessages(roomId);
-        }
-      }
-
-      // Live Presence sync from peer tabs
-      if (event.key?.startsWith("vigilant_user_presence_") && event.newValue) {
-        const target = event.key.replace("vigilant_user_presence_", "");
-        const status = event.newValue as User["status"];
-        if (status) {
-          useMatrixStore.getState().updateUserStatus(target, status);
-        }
-      }
-    };
-
-    const handleLocalPresence = () => {
-      // Re-hydrate presence for visible users
-      const liveStore = useMatrixStore.getState();
-      liveStore.users.forEach((u) => {
-        const p = this.getCachedUserPresence(u.id) || this.getCachedUserPresence(u.email);
-        if (p && p !== u.status) {
-          liveStore.updateUserStatus(u.id, p);
-        }
-      });
-    };
-
-    window.addEventListener("storage", handler);
-    window.addEventListener("vigilant_presence_change", handleLocalPresence);
-    this.crossTabSyncCleanup = () => {
-      window.removeEventListener("storage", handler);
-      window.removeEventListener("vigilant_presence_change", handleLocalPresence);
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Local data hydration (only real registered users + saved rooms/messages)
-  // ---------------------------------------------------------------------------
-
-  private hydrateLocalData(store: any) {
-    const currentUser: User | null = store.currentUser;
-
-    // Users: only those who have actually registered via this app
-    const registeredUsers: User[] = this.loadRegisteredUsers();
-    const allUsers = registeredUsers.some(
-      (u) => u.email.toLowerCase() === currentUser?.email?.toLowerCase()
-    )
-      ? registeredUsers
-      : currentUser
-      ? [...registeredUsers, currentUser]
-      : registeredUsers;
-    store.setUsers(allUsers);
-
-    // Rooms: default channels + any user-created rooms from localStorage
-    const savedRooms: Room[] = this.loadSavedRooms();
-
-    // Clean duplicate DMs from localStorage
-    const cleanedSavedRooms = this.deduplicateRooms(savedRooms);
-    if (cleanedSavedRooms.length !== savedRooms.length) {
       try {
-        localStorage.setItem("vigilant_shared_rooms", JSON.stringify(cleanedSavedRooms));
-      } catch (e) {}
-    }
-
-    const allRooms = this.mergeRooms(DEFAULT_CHANNELS, cleanedSavedRooms);
-
-    // Filter DMs to only show rooms the current user is a member of
-    const visibleRooms = currentUser
-      ? allRooms.filter((room) => {
-          if (room.type === "channel") return true;
-          const uId = currentUser.id.toLowerCase();
-          const uName = currentUser.name.toLowerCase();
-          const uEmail = currentUser.email.toLowerCase();
-          const uUsername = uEmail.split("@")[0].toLowerCase();
-
-          return room.members.some((m) => {
-            const low = m.toLowerCase();
-            return (
-              low === uId ||
-              low === uName ||
-              low === uEmail ||
-              low === uUsername ||
-              low.startsWith(`@${uUsername}:`)
-            );
-          });
-        })
-      : allRooms;
-
-    store.setRooms(visibleRooms);
-
-    // Messages: load initial 20 messages from localStorage for each visible room
-    visibleRooms.forEach((r) => {
-      const saved = localStorage.getItem(`vigilant_shared_messages_${r.id}`);
-      if (saved) {
-        try {
-          const allMsgs: Message[] = JSON.parse(saved);
-          const initialSlice = allMsgs.slice(-20);
-          store.setMessages(r.id, initialSlice);
-          store.setHasMoreMessages(r.id, allMsgs.length > 20);
-        } catch (e) {}
-      } else {
-        store.setMessages(r.id, []);
-        store.setHasMoreMessages(r.id, false);
+        const bridge = await getBridgeInstance();
+        this.ensureCurrentOperation(generation);
+        await bridge.restore_session(savedSession);
+        this.ensureCurrentOperation(generation);
+        const currentUser = this.userFromSession(savedSession);
+        store.setCurrentUser(currentUser);
+        // Register callbacks BEFORE start_sync per API lifecycle doc
+        this.registerCallbacks(bridge);
+        bridge.start_sync();
+        store.setSyncStatus("unknown");
+        // Rooms are populated from bridge after sync settles
+        await this.fetchRoomsFromBridge(bridge, store, () => generation === this.authGeneration);
+        this.ensureCurrentOperation(generation);
+        store.setConnectionMode("authenticated");
+        store.setConnectionError(null);
+      } catch (e) {
+        if (generation !== this.authGeneration) return;
+        store.setConnectionMode("error");
+        store.setSyncStatus("error");
+        store.setConnectionError({
+          phase: bridgeInitializationPhase(e),
+          message: e instanceof Error ? e.message : String(e),
+          retryable: true,
+        });
+        this.isInitialised = false;
       }
-    });
-  }
-
-  /** Deduplicate rooms: by ID for all rooms, by member fingerprint for DMs */
-  private deduplicateRooms(rooms: Room[]): Room[] {
-    const seen = new Set<string>();
-    const dmSeen = new Set<string>();
-    const result: Room[] = [];
-    for (const room of rooms) {
-      if (seen.has(room.id)) continue;
-      seen.add(room.id);
-      if (room.type === "dm") {
-        const fp = room.members.map((m) => m.toLowerCase()).sort().join("|");
-        if (fp && dmSeen.has(fp)) continue;
-        if (fp) dmSeen.add(fp);
-      }
-      result.push(room);
+    } catch (error) {
+      if (generation !== this.authGeneration) return;
+      store.setConnectionMode("error");
+      store.setSyncStatus("error");
+      store.setConnectionError({
+        phase: bridgeInitializationPhase(error),
+        message: error instanceof Error ? error.message : String(error),
+        retryable: true,
+      });
+      this.isInitialised = false;
+    } finally {
+      if (generation === this.authGeneration) store.setConnecting(false);
     }
-    return result;
-  }
-
-  private loadRegisteredUsers(): User[] {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(localStorage.getItem("vigilant_registered_users") || "[]");
-    } catch {
-      return [];
-    }
-  }
-
-  private loadSavedRooms(): Room[] {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(localStorage.getItem("vigilant_shared_rooms") || "[]");
-    } catch {
-      return [];
-    }
-  }
-
-  private mergeRooms(base: Room[], extra: Room[]): Room[] {
-    const merged = [...base];
-    extra.forEach((r) => {
-      if (!merged.some((b) => b.id === r.id)) merged.push(r);
-    });
-    return merged;
   }
 
   // ---------------------------------------------------------------------------
   // WASM bridge callbacks (registered before start_sync per API doc)
   // ---------------------------------------------------------------------------
 
-  private registerCallbacks(bridge: any, _store: any) {
+  private registerCallbacks(bridge: MatrixBridge) {
+    if (bridgesWithCallbacks.has(bridge)) return;
+    bridgesWithCallbacks.add(bridge);
     bridge.on_message((jsonMsg: string) => {
       try {
-        const msg = JSON.parse(jsonMsg);
+        if (bridgeInstance !== bridge || !useMatrixStore.getState().currentUser) return;
+        const msg = normalizeMessageEvent(JSON.parse(jsonMsg));
+        if (!msg) return;
 
         // Always read LIVE store state
         const liveStore = useMatrixStore.getState();
-        const existing: Message[] = liveStore.messages[msg.room_id] || [];
+        const existing: Message[] = liveStore.messages[msg.roomId] || [];
+        const messageId = stableMessageId(msg);
+        if (existing.some((message) => message.id === messageId)) return;
 
-        // Deduplicate: same sender + same timestamp + same body
-        const isDuplicate = existing.some(
-          (m) =>
-            m.timestamp === msg.timestamp &&
-            m.senderId === msg.sender &&
-            m.content === msg.body
-        );
-        if (isDuplicate) return;
-
-        const senderUsername = msg.sender.split(":")[0].replace("@", "");
+        const senderUsername = msg.senderId.slice(1, msg.senderId.indexOf(":"));
         const senderUser = liveStore.users.find(
-          (u) =>
-            u.id.toLowerCase() === msg.sender.toLowerCase() ||
-            u.email.split("@")[0].toLowerCase() === senderUsername.toLowerCase()
+          (u) => u.id.toLowerCase() === msg.senderId.toLowerCase()
         );
         const senderName = senderUser ? senderUser.name : senderUsername;
-        const isFileMsg = msg.message_type === "image" || msg.message_type === "file";
-
-        // Auto-add DM room to recipient's sidebar if not present yet
-        const roomExists = liveStore.rooms.some((r) => r.id === msg.room_id);
-        if (!roomExists && liveStore.currentUser) {
-          const newRoom: Room = {
-            id: msg.room_id,
-            name: senderName,
-            topic: "",
-            type: "dm",
-            unreadCount: 1,
-            members: [liveStore.currentUser.id, msg.sender, senderUsername],
-            isEncrypted: true,
-            createdAt: msg.timestamp || Date.now(),
-          };
-          liveStore.addRoom(newRoom);
-        }
+        const isFileMsg = msg.type === "image" || msg.type === "file";
 
         const message: Message = {
-          id: `${msg.room_id}_${msg.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
-          roomId: msg.room_id,
-          senderId: msg.sender,
+          id: messageId,
+          roomId: msg.roomId,
+          senderId: msg.senderId,
           senderName,
-          content: isFileMsg ? (msg.filename || msg.body || "") : msg.body,
+          content: msg.body,
           timestamp: msg.timestamp,
-          type: msg.message_type as "text" | "image" | "file",
-          isEncrypted: Boolean(msg.message_uri || msg.mime_type),
-          fileName: isFileMsg ? (msg.filename || msg.body) : undefined,
-          fileUrl: isFileMsg ? (msg.message_uri || undefined) : undefined,
+          type: msg.type,
+          fileName: isFileMsg ? msg.body : undefined,
+          mediaSource: msg.mediaSource,
+          mimeType: msg.mimeType,
         };
 
-        liveStore.addMessage(msg.room_id, message);
-
-        // Also persist incoming messages so the recipient's reload retains them
-        try {
-          const key = `vigilant_shared_messages_${msg.room_id}`;
-          const persisted: Message[] = JSON.parse(localStorage.getItem(key) || "[]");
-          const alreadyPersisted = persisted.some(
-            (m) => m.timestamp === message.timestamp && m.senderId === message.senderId && m.content === message.content
-          );
-          if (!alreadyPersisted) {
-            persisted.push(message);
-            localStorage.setItem(key, JSON.stringify(persisted));
-          }
-        } catch (e) {}
-      } catch (err) {
-        console.error("[MatrixBridge] on_message parse error:", err);
+        liveStore.addMessage(msg.roomId, message);
+      } catch {
+        console.error("[MatrixBridge] Ignored an invalid message event from the bridge.");
       }
     });
 
     bridge.on_notification((jsonNotif: string) => {
       try {
+        if (bridgeInstance !== bridge || !useMatrixStore.getState().currentUser) return;
         const notif = JSON.parse(jsonNotif);
+        if (typeof notif?.sender !== "string" || typeof notif?.body !== "string") return;
+        if (typeof Notification === "undefined") return;
         if (Notification.permission === "granted") {
-          const sender = notif.sender.split(":")[0].replace("@", "");
-          new Notification("Vigilant — New Message", { body: `${sender}: ${notif.body}` });
+          const sender = notif.sender.startsWith("@") ? notif.sender.slice(1).split(":")[0] : "Matrix user";
+          new Notification("Vigilant — New Message", {
+            body: `${sender}: ${notif.body}`,
+          });
         }
-      } catch (err) {
-        console.error("[MatrixBridge] on_notification parse error:", err);
+      } catch {
+        console.error("[MatrixBridge] Ignored an invalid notification event from the bridge.");
       }
     });
   }
@@ -433,278 +277,196 @@ class MatrixService {
   // Sync rooms from Synapse via bridge
   // ---------------------------------------------------------------------------
 
-  async fetchRoomsFromBridge(bridge: any, store: any) {
+  async fetchRoomsFromBridge(
+    bridge: MatrixBridge,
+    store: ReturnType<typeof useMatrixStore.getState>,
+    isCurrent: () => boolean = () => true
+  ) {
     try {
       const rawChannels = await bridge.list_joined_rooms();
-      const bridgeChannels: Room[] = JSON.parse(rawChannels).map((c: any) => ({
-        id: c.room_id,
-        name: c.name || c.room_id,
-        topic: "",
-        type: "channel" as const,
-        unreadCount: 0,
-        members: [],
-        isEncrypted: false,
-        createdAt: Date.now(),
-      }));
+      if (!isCurrent()) return;
+      const bridgeChannels = parseJoinedRooms(rawChannels);
 
       const rawDMs = await bridge.list_direct_messages();
-      const bridgeDMs: Room[] = JSON.parse(rawDMs).map((dm: any) => ({
-        id: dm.room_id,
-        name: dm.name || dm.room_id,
-        topic: "",
-        type: "dm" as const,
-        unreadCount: 0,
-        members: dm.targets || [],
-        isEncrypted: true,
-        createdAt: Date.now(),
-      }));
+      if (!isCurrent()) return;
+      const bridgeDMs = parseDirectMessages(rawDMs);
 
-      if (bridgeChannels.length > 0 || bridgeDMs.length > 0) {
-        // MERGE with existing local rooms — do not overwrite (preserves locally-created rooms)
-        const existing = store.rooms as Room[];
-        const merged = [...existing];
-        [...bridgeChannels, ...bridgeDMs].forEach((r) => {
-          if (!merged.some((e) => e.id === r.id)) merged.push(r);
-        });
-        store.setRooms(merged);
-
-        // Persist merged rooms
-        try {
-          const savedRooms = this.loadSavedRooms();
-          const finalSaved = [...savedRooms];
-          merged.forEach((r) => {
-            if (!finalSaved.some((s) => s.id === r.id)) finalSaved.push(r);
-          });
-          localStorage.setItem("vigilant_shared_rooms", JSON.stringify(finalSaved));
-        } catch (e) {}
-      }
+      const allRooms = [...bridgeChannels, ...bridgeDMs];
+      if (isCurrent()) store.setRooms(allRooms);
     } catch (err) {
-      console.warn("[MatrixBridge] fetchRoomsFromBridge failed:", err);
+      if (isCurrent()) {
+        store.setConnectionMode("error");
+        store.setSyncStatus("error");
+        store.setConnectionError({
+          phase: "sync",
+          message: err instanceof Error ? err.message : String(err),
+          retryable: true,
+        });
+      }
+      throw err;
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Periodic message sync (local storage → store, for same-browser cross-tab)
-  // ---------------------------------------------------------------------------
-
-  syncRoomMessages(roomId: string) {
-    if (typeof window === "undefined") return;
-    const store = useMatrixStore.getState();
-    const saved = localStorage.getItem(`vigilant_shared_messages_${roomId}`);
-    if (!saved) return;
-    try {
-      const parsed: Message[] = JSON.parse(saved);
-      if (parsed.length === 0) return;
-      const current = store.messages[roomId] || [];
-
-      // Build a Set of existing message fingerprints for O(1) dedup
-      const existingKeys = new Set(
-        current.map((m) => `${m.senderId}|${m.timestamp}|${m.content}`)
-      );
-
-      const newMessages = parsed.filter(
-        (p) => !existingKeys.has(`${p.senderId}|${p.timestamp}|${p.content}`)
-      );
-      if (newMessages.length === 0) return;
-
-      const merged = [...current, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
-      store.setMessages(roomId, merged);
-    } catch (e) {}
   }
 
   // ---------------------------------------------------------------------------
   // Authentication
   // ---------------------------------------------------------------------------
 
-  async login(email: string, password: string): Promise<User> {
+  private async finishAuthentication(
+    bridge: MatrixBridge,
+    session: string,
+    generation: number,
+  ): Promise<User> {
     const store = useMatrixStore.getState();
-    store.setConnecting(true);
-
-    if (!isValidEmail(email)) {
-      store.setConnecting(false);
-      throw new Error("Please enter a valid email address.");
-    }
-
-    const username = email.split("@")[0].toLowerCase();
-
-    // Attempt Synapse login via WASM bridge
-    try {
-      const bridge = await getBridgeInstance();
-      console.log(`[MatrixBridge] login() → username: ${username}`);
-      await bridge.login(username, password);
-
-      const session = bridge.export_session();
-      // ✅ Tab-scoped: sessionStorage so other tabs keep their own sessions
-      if (session) sessionStorage.setItem("matrix_session", session);
-
-      const displayName = this.resolveDisplayName(email, username);
-      const user: User = {
-        id: `@${username}:${this.matrixDomain()}`,
-        name: displayName,
-        email,
-        status: "online",
-      };
-
-      // ✅ Tab-scoped: sessionStorage keeps this user only in this tab
-      sessionStorage.setItem("vigilant_user", JSON.stringify(user));
-      store.setCurrentUser(user);
-
-      this.startCrossTabSync(store);
-      this.registerCallbacks(bridge, store);
-      try {
-        bridge.start_sync();
-      } catch (e) {
-        // "Sync is already running" — harmless if sync was already started
-        // (e.g. a restored session tab that also triggers login)
-        console.warn("[MatrixBridge] start_sync skipped (already running):", e);
-      }
-      await this.fetchRoomsFromBridge(bridge, store);
-      store.setConnectionMode("wasm");
-      store.setSynced(true);
-      store.setConnecting(false);
-      return user;
-    } catch (error: any) {
-      console.warn("[MatrixBridge] login() failed:", error?.message || error);
-      if (
-        error?.message?.includes("M_FORBIDDEN") ||
-        error?.message?.includes("Invalid") ||
-        error?.message?.includes("forbidden")
-      ) {
-        store.setConnecting(false);
-        throw new Error("Invalid email or password. Please try again.");
-      }
-    }
-
-    // Local fallback mode (Synapse not reachable — still requires email registered locally)
-    const registered = this.loadRegisteredUsers();
-    const found = registered.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (!found) {
-      store.setConnecting(false);
-      throw new Error("No account found for this email. Please register first.");
-    }
-
-    // ✅ Tab-scoped
-    sessionStorage.setItem("vigilant_user", JSON.stringify(found));
-    store.setCurrentUser(found);
-    store.setConnectionMode("local");
-    this.startCrossTabSync(store);
-    this.hydrateLocalData(store);
-    store.setSynced(true);
-    store.setConnecting(false);
-    return found;
-  }
-
-  async register(name: string, email: string, password: string): Promise<User> {
-    const store = useMatrixStore.getState();
-    store.setConnecting(true);
-
-    if (!isValidEmail(email)) {
-      store.setConnecting(false);
-      throw new Error("Please enter a valid email address.");
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    const existing = this.loadRegisteredUsers();
-    if (existing.some((u) => u.email.toLowerCase() === cleanEmail)) {
-      store.setConnecting(false);
-      throw new Error(
-        "An account with this email already exists. Please sign in or use a different email."
-      );
-    }
-
-    const username = cleanEmail.split("@")[0];
-    const displayName = name.trim() || username.charAt(0).toUpperCase() + username.slice(1);
-
-    try {
-      const bridge = await getBridgeInstance();
-      console.log(`[MatrixBridge] register() → username: ${username}`);
-      await bridge.register(username, password);
-
-      const session = bridge.export_session();
-      // ✅ Tab-scoped
-      if (session) sessionStorage.setItem("matrix_session", session);
-
-      const user: User = {
-        id: `@${username}:${this.matrixDomain()}`,
-        name: displayName,
-        email: cleanEmail,
-        status: "online",
-      };
-
-      this.persistUserRegistration(user);
-      // ✅ Tab-scoped
-      sessionStorage.setItem("vigilant_user", JSON.stringify(user));
-      store.setCurrentUser(user);
-
-      this.startCrossTabSync(store);
-      this.registerCallbacks(bridge, store);
-      try {
-        bridge.start_sync();
-      } catch (e) {
-        // "Sync is already running" — harmless, suppress silently
-        console.warn("[MatrixBridge] start_sync skipped (already running):", e);
-      }
-      await this.fetchRoomsFromBridge(bridge, store);
-      store.setConnectionMode("wasm");
-      store.setSynced(true);
-      store.setConnecting(false);
-      return user;
-    } catch (error: any) {
-      if (
-        error?.message?.includes("already exists") ||
-        error?.message?.includes("M_USER_IN_USE")
-      ) {
-        store.setConnecting(false);
-        throw new Error(
-          "An account with this username already exists on the server. Please sign in."
-        );
-      }
-      console.warn("[MatrixBridge] register() failed, using local fallback:", error?.message || error);
-    }
-
-    const user: User = {
-      id: `@${username}:${this.matrixDomain()}`,
-      name: displayName,
-      email: cleanEmail,
-      status: "online",
-    };
-
-    this.persistUserRegistration(user);
-    // ✅ Tab-scoped
-    sessionStorage.setItem("vigilant_user", JSON.stringify(user));
+    const user = this.userFromSession(session);
+    await this.persistSession(session, bridge);
+    this.ensureCurrentOperation(generation);
     store.setCurrentUser(user);
-    store.setConnectionMode("local");
-    this.startCrossTabSync(store);
-    this.hydrateLocalData(store);
-    store.setSynced(true);
-    store.setConnecting(false);
+    this.registerCallbacks(bridge);
+    try {
+      bridge.start_sync();
+      // The published bridge has no sync lifecycle callback. A successful call
+      // only means startup was requested, not that a sync completed.
+      store.setSyncStatus("unknown");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      store.setConnectionMode("error");
+      store.setSyncStatus("error");
+      store.setConnectionError({ phase: "sync", message, retryable: true });
+      throw new Error(`Matrix synchronization could not start: ${message}`);
+    }
+    await this.fetchRoomsFromBridge(bridge, store, () => generation === this.authGeneration);
+    this.ensureCurrentOperation(generation);
+    store.setConnectionMode("authenticated");
+    store.setConnectionError(null);
+    this.isInitialised = true;
     return user;
   }
 
-  async logout() {
+  async login(email: string, password: string): Promise<User> {
     const store = useMatrixStore.getState();
+    let username: string;
+    try {
+      username = matrixUsernameFromInput(email);
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("Enter a valid Matrix username.");
+    }
+    const generation = ++this.authGeneration;
+    store.setConnecting(true);
+    store.setConnectionMode("connecting");
+    store.setSyncStatus("initializing");
+    store.setConnectionError(null);
+
     try {
       const bridge = await getBridgeInstance();
-      bridge.stop_sync();
-      await bridge.logout();
-    } catch (err) {
-      console.warn("[MatrixBridge] logout error:", err);
+      this.ensureCurrentOperation(generation);
+      await bridge.login(username, password);
+      this.ensureCurrentOperation(generation);
+      const session = bridge.export_session();
+      if (!session) throw new Error("Matrix login succeeded without a restorable session.");
+      return await this.finishAuthentication(bridge, session, generation);
+    } catch (error) {
+      if (generation === this.authGeneration) {
+        store.setConnecting(false);
+        if (useMatrixStore.getState().connectionError === null) {
+          const message = error instanceof Error ? error.message : String(error);
+          const phase = /WASM|bridge package/i.test(message) ? "wasm" : /homeserver|NEXT_PUBLIC/i.test(message) ? "homeserver" : "auth";
+          store.setConnectionMode("error");
+          store.setSyncStatus("error");
+          store.setConnectionError({ phase, message, retryable: true });
+        }
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (/M_LIMIT_EXCEEDED/.test(message)) throw new Error("Too many login attempts. Please wait before trying again.");
+      if (/M_FORBIDDEN|M_UNKNOWN|invalid password|invalid username/i.test(message)) throw new Error("The homeserver rejected these sign-in details.");
+      if (/ECONNREFUSED|Failed to fetch|network|connect/i.test(message)) throw new Error("Cannot reach the homeserver. Check your network connection.");
+      throw error instanceof Error ? error : new Error("Matrix sign-in failed.");
     } finally {
-      // ✅ Clear only tab-scoped session — leave shared localStorage untouched
-      sessionStorage.removeItem("matrix_session");
-      sessionStorage.removeItem("vigilant_user");
-      this.crossTabSyncCleanup?.();
-      this.crossTabSyncCleanup = null;
-      store.reset();
-      this.isInitialised = false;
-      bridgeInstance = null;
+      if (generation === this.authGeneration) store.setConnecting(false);
     }
   }
 
+  async register(email: string, password: string): Promise<User> {
+    const store = useMatrixStore.getState();
+    let username: string;
+    try {
+      username = matrixUsernameFromInput(email);
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("Enter a valid Matrix username.");
+    }
+    const generation = ++this.authGeneration;
+    store.setConnecting(true);
+    store.setConnectionMode("connecting");
+    store.setSyncStatus("initializing");
+    store.setConnectionError(null);
+
+    try {
+      const bridge = await getBridgeInstance();
+      this.ensureCurrentOperation(generation);
+      await bridge.register(username, password);
+      this.ensureCurrentOperation(generation);
+
+      let session = bridge.export_session();
+      if (!session) {
+        // Registration is not documented to authenticate in the published API.
+        // Use its real login export when registration returned no session.
+        await bridge.login(username, password);
+        this.ensureCurrentOperation(generation);
+        session = bridge.export_session();
+      }
+      if (!session) throw new Error("Registration succeeded, but the bridge did not return a restorable session after sign-in.");
+      return await this.finishAuthentication(bridge, session, generation);
+    } catch (error) {
+      if (generation === this.authGeneration) {
+        store.setConnecting(false);
+        if (useMatrixStore.getState().connectionError === null) {
+          const message = error instanceof Error ? error.message : String(error);
+          store.setConnectionMode("error");
+          store.setSyncStatus("error");
+          store.setConnectionError({ phase: /WASM|bridge package/i.test(message) ? "wasm" : "auth", message, retryable: true });
+        }
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (/already exists|M_USER_IN_USE/.test(message)) throw new Error("This homeserver already has that account. Try signing in.");
+      if (/M_FORBIDDEN|Registration/.test(message)) throw new Error("Registration is not permitted on this homeserver.");
+      if (/ECONNREFUSED|Failed to fetch|network/i.test(message)) throw new Error("Cannot reach the homeserver. Check your network connection.");
+      throw error instanceof Error ? error : new Error("Matrix registration failed.");
+    } finally {
+      if (generation === this.authGeneration) store.setConnecting(false);
+    }
+  }
+
+  async logout(): Promise<void> {
+    const store = useMatrixStore.getState();
+    ++this.authGeneration;
+    ++bridgeInitializationGeneration;
+    const bridge = bridgeInstance;
+    const failures: string[] = [];
+    if (bridge) {
+      try {
+        bridge.stop_sync();
+      } catch (error) {
+        failures.push(`Matrix synchronization could not be stopped: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      try {
+        await bridge.logout();
+      } catch (error) {
+        failures.push(`Matrix remote logout failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    try {
+      if (typeof window !== "undefined") sessionStorage.removeItem("matrix_session");
+    } catch {
+      failures.push("The saved session could not be removed from this browser.");
+    } finally {
+      store.reset();
+      this.isInitialised = false;
+      bridgeInstance = null;
+      bridgeInitialization = null;
+    }
+    if (failures.length > 0) throw new Error(failures.join(" "));
+  }
+
   destroy() {
-    // Intentionally left minimal — stop_sync is called during logout
-    // Removing matrixService.destroy() from layout.tsx cleanup is recommended (per integration notes)
     this.isInitialised = false;
   }
 
@@ -714,147 +476,94 @@ class MatrixService {
 
   async createRoom(
     targetInput: string,
-    type: "channel" | "dm",
-    topic?: string,
-    isEncrypted = false
+    type: "channel" | "dm"
   ): Promise<Room> {
     const store = useMatrixStore.getState();
-    const currentUser = store.currentUser;
-    const cleanInput = targetInput.replace("#", "").trim();
+    const bridge = this.requireAuthenticatedBridge();
+    const cleanInput = targetInput.trim();
 
     if (type === "dm") {
       const inputLower = cleanInput.toLowerCase();
-      // Find exact target user in store
-      const targetUser = store.users.find(
-        (u) =>
-          u.id.toLowerCase() === inputLower ||
-          u.email.toLowerCase() === inputLower ||
-          u.name.toLowerCase() === inputLower ||
-          u.id.toLowerCase().startsWith(`@${inputLower}:`)
-      );
+      // Check if a DM with this exact user already exists in store
+      const targetUser = store.users.find((u) => u.id.toLowerCase() === inputLower);
 
-      const targetId = targetUser
-        ? targetUser.id
-        : cleanInput.includes(":")
-        ? cleanInput
-        : `@${cleanInput.toLowerCase()}:${this.matrixDomain()}`;
+      const targetId = targetUser?.id || cleanInput;
+      if (!isMatrixUserId(targetId)) {
+        throw new Error("Enter an exact Matrix user ID such as @name:server.org.");
+      }
 
-      const targetEmail = targetUser ? targetUser.email.toLowerCase() : "";
-      const targetName = targetUser ? targetUser.name : cleanInput;
+      const targetName = targetUser?.name || targetId;
 
-      // Check if a DM with this exact user already exists
+      // Check for existing DM in store
       const existing = store.rooms.find((r) => {
         if (r.type !== "dm") return false;
         const memberLowers = r.members.map((m) => m.toLowerCase());
         return (
           memberLowers.includes(targetId.toLowerCase()) ||
-          (targetEmail && memberLowers.includes(targetEmail)) ||
-          r.name.toLowerCase() === targetName.toLowerCase()
+          r.directUserId?.toLowerCase() === targetId.toLowerCase()
         );
       });
       if (existing) return existing;
 
-      let roomId = `room_${Math.random().toString(36).slice(2, 9)}`;
-
-      // Try bridge room creation
-      try {
-        const bridge = await getBridgeInstance();
-        const dmId = await bridge.get_or_create_direct_message(targetId);
-        if (dmId) roomId = dmId;
-      } catch (e) {
-        console.warn("[MatrixBridge] createRoom bridge call skipped:", e);
-      }
-
-      const members: string[] = currentUser
-        ? [currentUser.id, currentUser.name, currentUser.email]
-        : [];
-      members.push(targetId, targetName);
-      if (targetEmail) members.push(targetEmail);
+      // Must reach bridge — no local fabrication
+      const roomId = await bridge.get_or_create_direct_message(targetId);
+      if (!isMatrixRoomId(roomId)) throw new Error("Matrix returned an invalid direct-message room ID.");
 
       const newRoom: Room = {
         id: roomId,
         name: targetName,
-        topic: topic || "",
         type: "dm",
         unreadCount: 0,
-        members: Array.from(new Set(members)),
-        isEncrypted: isEncrypted || true,
+        members: [],
+        memberListAvailable: false,
+        directUserId: targetId,
         createdAt: Date.now(),
       };
 
       store.addRoom(newRoom);
-
-      try {
-        const saved = this.loadSavedRooms();
-        if (!saved.some((r) => r.id === newRoom.id)) {
-          saved.push(newRoom);
-          localStorage.setItem("vigilant_shared_rooms", JSON.stringify(saved));
-        }
-      } catch (e) {}
-
       store.setMessages(roomId, []);
       return newRoom;
     }
 
-    // Channel room creation
-    let roomId = `room_${Math.random().toString(36).slice(2, 9)}`;
-    try {
-      const bridge = await getBridgeInstance();
-      const rId = await bridge.create_room(cleanInput);
-      if (rId) roomId = rId;
-      await bridge.join_room(roomId);
-    } catch (e) {
-      console.warn("[MatrixBridge] createRoom bridge call skipped:", e);
-    }
-
-    const members: string[] = currentUser
-      ? [currentUser.id, currentUser.name]
-      : [];
+    // Channel room creation — must reach bridge
+    const roomName = cleanInput.replace(/^#/, "").trim();
+    if (!roomName) throw new Error("Enter a channel name.");
+    const roomId = await bridge.create_room(roomName);
+    if (!isMatrixRoomId(roomId)) throw new Error("Matrix returned an invalid room ID.");
+    await bridge.join_room(roomId);
 
     const newRoom: Room = {
       id: roomId,
-      name: cleanInput,
-      topic: topic || "",
+      name: roomName,
       type: "channel",
-      unreadCount: 0,
-      members: Array.from(new Set(members)),
-      isEncrypted,
-      createdAt: Date.now(),
+      members: [],
+      memberListAvailable: false,
     };
 
     store.addRoom(newRoom);
-
-    try {
-      const saved = this.loadSavedRooms();
-      if (!saved.some((r) => r.id === newRoom.id)) {
-        saved.push(newRoom);
-        localStorage.setItem("vigilant_shared_rooms", JSON.stringify(saved));
-      }
-    } catch (e) {}
-
     store.setMessages(roomId, []);
     return newRoom;
   }
 
-  leaveRoom(roomId: string) {
+  async leaveRoom(roomId: string): Promise<void> {
     const store = useMatrixStore.getState();
-    getBridgeInstance()
-      .then(async (bridge) => {
-        try {
-          await bridge.leave_room(roomId);
-        } catch (e) {
-          console.warn("[MatrixBridge] leaveRoom error:", e);
-        }
-      })
-      .catch((e) => console.warn("[MatrixBridge] leaveRoom bridge unavailable:", e));
+    if (!isMatrixRoomId(roomId)) throw new Error("Enter a valid Matrix room ID.");
+    const bridge = this.requireAuthenticatedBridge();
+    await bridge.leave_room(roomId);
     store.leaveRoom(roomId);
+  }
+
+  async inviteUser(roomId: string, userId: string): Promise<void> {
+    if (!isMatrixRoomId(roomId) || !isMatrixUserId(userId)) throw new Error("Enter a valid Matrix room ID and user ID.");
+    const bridge = this.requireAuthenticatedBridge();
+    await bridge.invite_user(roomId, userId);
   }
 
   // ---------------------------------------------------------------------------
   // Messaging
   // ---------------------------------------------------------------------------
 
-  sendMessage(
+  async sendMessage(
     roomId: string,
     content: string,
     type: "text" | "image" | "file" = "text",
@@ -862,193 +571,123 @@ class MatrixService {
     fileUrl?: string,
     fileData?: Uint8Array,
     mimeType?: string
-  ) {
+  ): Promise<string> {
     const store = useMatrixStore.getState();
     const currentUser = store.currentUser;
-    if (!currentUser) return;
-
-    const msg: Message = {
-      id: `msg_${Math.random().toString(36).slice(2, 9)}`,
-      roomId,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatarUrl,
-      content,
-      timestamp: Date.now(),
-      type,
-      fileName,
-      fileUrl,
-      isEncrypted: store.rooms.find((r) => r.id === roomId)?.isEncrypted || false,
-    };
-
-    store.addMessage(roomId, msg);
-
-    // Persist for cross-tab sync with quota resilience
-    try {
-      const key = `vigilant_shared_messages_${roomId}`;
-      const existing: Message[] = JSON.parse(localStorage.getItem(key) || "[]");
-      existing.push(msg);
-      // Keep up to 250 messages per room in localStorage to prevent 5MB storage exhaustion
-      const trimmed = existing.slice(-250);
-      localStorage.setItem(key, JSON.stringify(trimmed));
-      window.dispatchEvent(new Event("vigilant_message_sent"));
-    } catch (e) {
-      console.warn("Storage quota limit reached, saving trimmed payload:", e);
-      try {
-        const key = `vigilant_shared_messages_${roomId}`;
-        // Strip out large data URLs in emergency fallback
-        const leanMsg = { ...msg, fileUrl: undefined };
-        const existing: Message[] = JSON.parse(localStorage.getItem(key) || "[]");
-        existing.push(leanMsg);
-        localStorage.setItem(key, JSON.stringify(existing.slice(-50)));
-        window.dispatchEvent(new Event("vigilant_message_sent"));
-      } catch {}
+    if (!currentUser) throw new Error("Sign in before sending a message.");
+    if (!isMatrixRoomId(roomId)) throw new Error("This is not a valid Matrix room ID.");
+    if (type === "text" && !content.trim()) throw new Error("Enter a message before sending.");
+    if (!store.rooms.some((room) => room.id === roomId)) {
+      throw new Error("This room is not available in your Matrix session.");
+    }
+    if (type !== "text" && (!fileData || !fileName)) {
+      throw new Error("The attachment could not be read. Please select it again.");
+    }
+    if (fileData && fileData.byteLength > 25 * 1024 * 1024) {
+      throw new Error("Attachments must be 25 MB or smaller.");
+    }
+    if (type === "image" && (!mimeType?.startsWith("image/") || mimeType === "image/svg+xml")) {
+      throw new Error("Only supported raster image attachments can be sent.");
+    }
+    if (type === "file" && (mimeType !== "application/pdf" || !fileName?.toLowerCase().endsWith(".pdf"))) {
+      throw new Error("Only PDF attachments are supported.");
+    }
+    if (type === "file" && fileData && new TextDecoder().decode(fileData.subarray(0, 5)) !== "%PDF-") {
+      throw new Error("The selected file does not contain a valid PDF signature.");
+    }
+    if (fileData && mimeType && !mediaBytesMatchMime(fileData, mimeType)) {
+      throw new Error("The attachment content does not match its declared media type.");
     }
 
-    // Send via WASM bridge (background — message is already saved to localStorage above)
-    getBridgeInstance()
-      .then(async (bridge) => {
-        try {
-          // Matrix room IDs must start with '!' sigil for the Matrix Rust SDK
-          if (!roomId.startsWith("!")) return;
-
-          if (type === "text") {
-            await bridge.send_message(roomId, content);
-          } else if (type === "image" && fileData && fileName) {
-            // Use the browser-supplied MIME type (file.type) — falls back to
-            // extension guessing only if the caller didn't thread it through.
-            const mime = mimeType || (fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
-            await bridge.send_image(roomId, fileData, fileName, mime);
-          } else if (type === "file" && fileData && fileName) {
-            await bridge.send_file(roomId, fileData, fileName, "application/pdf");
-          }
-        } catch (e) {
-          console.warn("[MatrixBridge] sendMessage bridge error:", e);
-        }
-      })
-      .catch(() => {
-        // WASM bridge unavailable — message already persisted to localStorage
-      });
+    try {
+      const bridge = this.requireAuthenticatedBridge();
+      if (type === "text") {
+        return await bridge.send_message(roomId, content);
+      } else if (type === "image" && fileData && fileName) {
+        const mime = safeMediaMime("image", mimeType);
+        if (!mime) throw new Error("Only JPEG, PNG, GIF, WebP, and AVIF image attachments are supported.");
+        return await bridge.send_image(roomId, fileData, fileName, mime);
+      } else if (type === "file" && fileData && fileName) {
+        const mime = safeMediaMime("file", mimeType);
+        if (!mime) throw new Error("Only PDF attachments are supported.");
+        return await bridge.send_file(roomId, fileData, fileName, mime);
+      }
+      throw new Error("Unsupported Matrix message payload.");
+    } catch (e) {
+      throw new Error(`Message was not accepted by Matrix: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // Room history (WASM bridge + Local Fallback Pagination)
+  // Room history and pagination — bridge only, no local fallback
   // ---------------------------------------------------------------------------
 
   async getRoomHistory(roomId: string, limit = 20) {
     const store = useMatrixStore.getState();
-    try {
-      const bridge = await getBridgeInstance();
-      if (bridge && roomId.startsWith("!")) {
-        const raw = await bridge.get_room_history(roomId, limit);
-        const history = JSON.parse(raw);
-        const messages: Message[] = (history.messages || []).map((m: any) => ({
-          id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
-          roomId: m.room_id,
-          senderId: m.sender,
-          senderName: m.sender.split(":")[0].replace("@", ""),
-          content: m.body,
-          timestamp: m.timestamp,
-          type: m.message_type as "text" | "image" | "file",
-          isEncrypted: Boolean(m.message_uri || m.mime_type),
-          fileName: m.message_type !== "text" ? m.body : undefined,
-          fileUrl: m.message_uri || undefined,
-          mediaSource: m.media_source,
-          mimeType: m.mime_type,
-        }));
-        if (messages.length > 0) {
-          store.setMessages(roomId, messages);
-          store.setHasMoreMessages(roomId, messages.length >= limit);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn(`[MatrixBridge] getRoomHistory(${roomId}) bridge failed, checking local:`, err);
+    if (!isMatrixRoomId(roomId)) {
+      throw new Error("Cannot load history for an invalid Matrix room ID.");
     }
+    if (!store.rooms.some((room) => room.id === roomId)) throw new Error("This room is not available in your Matrix session.");
 
-    // Local fallback: load only initial slice of up to `limit` messages
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`vigilant_shared_messages_${roomId}`);
-        if (saved) {
-          const all: Message[] = JSON.parse(saved);
-          const initialSlice = all.slice(-limit);
-          store.setMessages(roomId, initialSlice);
-          store.setHasMoreMessages(roomId, all.length > limit);
-        } else {
-          store.setMessages(roomId, []);
-          store.setHasMoreMessages(roomId, false);
-        }
-      } catch (e) {}
+    try {
+      const bridge = this.requireAuthenticatedBridge();
+      const raw = await bridge.get_room_history(roomId, limit);
+      const history = parseHistoryResponse(raw, roomId);
+      const messages: Message[] = history.messages.map((message) => ({
+        id: stableMessageId(message),
+        roomId: message.roomId,
+        senderId: message.senderId,
+        senderName: message.senderId.slice(1, message.senderId.indexOf(":")),
+        content: message.body,
+        timestamp: message.timestamp,
+        type: message.type,
+        fileName: message.type !== "text" ? message.body : undefined,
+        mediaSource: message.mediaSource,
+        mimeType: message.mimeType,
+      }));
+      store.setMessages(roomId, messages);
+      store.setHasMoreMessages(roomId, history.hasMore);
+    } catch (err) {
+      throw new Error(`Could not load Matrix room history: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  /**
-   * loadMoreHistory() — Paginates older events for a room timeline.
-   * Loads `limit` earlier messages and prepends them smoothly.
-   */
-  async loadMoreHistory(roomId: string, limit = 20): Promise<{ messages: Message[]; has_more: boolean }> {
+  async loadMoreHistory(
+    roomId: string,
+    limit = 20
+  ): Promise<{ messages: Message[]; has_more: boolean }> {
     const store = useMatrixStore.getState();
+    if (!isMatrixRoomId(roomId)) {
+      throw new Error("Cannot paginate an invalid Matrix room ID.");
+    }
+    if (!store.rooms.some((room) => room.id === roomId)) throw new Error("This room is not available in your Matrix session.");
+
     try {
-      const bridge = await getBridgeInstance();
-      if (bridge && roomId.startsWith("!")) {
-        const raw = await bridge.load_more_history(roomId, limit);
-        const history = JSON.parse(raw);
-        const messages: Message[] = (history.messages || []).map((m: any) => ({
-          id: `${m.room_id}_${m.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
-          roomId: m.room_id,
-          senderId: m.sender,
-          senderName: m.sender.split(":")[0].replace("@", ""),
-          content: m.body,
-          timestamp: m.timestamp,
-          type: m.message_type as "text" | "image" | "file",
-          isEncrypted: Boolean(m.message_uri || m.mime_type),
-          fileName: m.message_type !== "text" ? m.body : undefined,
-          fileUrl: m.message_uri || undefined,
-          mediaSource: m.media_source,
-          mimeType: m.mime_type,
-        }));
+      const bridge = this.requireAuthenticatedBridge();
+      const raw = await bridge.load_more_history(roomId, limit);
+      const history = parseHistoryResponse(raw, roomId);
+      const messages: Message[] = history.messages.map((message) => ({
+        id: stableMessageId(message),
+        roomId: message.roomId,
+        senderId: message.senderId,
+        senderName: message.senderId.slice(1, message.senderId.indexOf(":")),
+        content: message.body,
+        timestamp: message.timestamp,
+        type: message.type,
+        fileName: message.type !== "text" ? message.body : undefined,
+        mediaSource: message.mediaSource,
+        mimeType: message.mimeType,
+      }));
 
-        if (messages.length > 0) {
-          store.prependMessages(roomId, messages);
-        }
-        const hasMore = Boolean(history.has_more);
-        store.setHasMoreMessages(roomId, hasMore);
-        return { messages, has_more: hasMore };
+      if (messages.length > 0) {
+        store.prependMessages(roomId, messages);
       }
+      const hasMore = history.hasMore;
+      store.setHasMoreMessages(roomId, hasMore);
+      return { messages, has_more: hasMore };
     } catch (err) {
-      console.warn(`[MatrixBridge] loadMoreHistory(${roomId}) bridge failed, falling back to local:`, err);
+      throw new Error(`Could not load older Matrix messages: ${err instanceof Error ? err.message : String(err)}`);
     }
-
-    // Local fallback pagination
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`vigilant_shared_messages_${roomId}`);
-        if (!saved) {
-          store.setHasMoreMessages(roomId, false);
-          return { messages: [], has_more: false };
-        }
-        const all: Message[] = JSON.parse(saved);
-        const currentMessages = store.messages[roomId] || [];
-
-        const earliestTimestamp = currentMessages.length > 0 ? currentMessages[0].timestamp : Infinity;
-        const olderCandidates = all.filter((m) => m.timestamp < earliestTimestamp);
-
-        const olderSlice = olderCandidates.slice(-limit);
-        const hasMore = olderCandidates.length > olderSlice.length;
-
-        if (olderSlice.length > 0) {
-          store.prependMessages(roomId, olderSlice);
-        }
-        store.setHasMoreMessages(roomId, hasMore);
-        return { messages: olderSlice, has_more: hasMore };
-      } catch (e) {
-        console.warn("[MatrixService] local loadMoreHistory error:", e);
-      }
-    }
-
-    store.setHasMoreMessages(roomId, false);
-    return { messages: [], has_more: false };
   }
 
   /**
@@ -1056,203 +695,121 @@ class MatrixService {
    *
    * `mediaSourceJson` must come directly from the `media_source` field
    * of a JsMessage. Treat it as opaque bridge data — do not construct it manually.
-   *
-   * Usage:
-   *   const bytes = await matrixService.getMedia(message.media_source);
-   *   const blob = new Blob([bytes], { type: message.mime_type });
-   *   const url = URL.createObjectURL(blob);
-   *   // imageElement.src = url;  OR  anchor.href = url; anchor.click();
-   *   // Cleanup: URL.revokeObjectURL(url);
    */
-  async getMedia(mediaSourceJson: string): Promise<Uint8Array | null> {
+  async getMedia(mediaSourceJson: string): Promise<Uint8Array> {
     try {
-      const bridge = await getBridgeInstance();
-      return await bridge.get_media(mediaSourceJson);
+      if (!mediaSourceJson.trim()) throw new Error("The Matrix media source is missing.");
+      const bridge = this.requireAuthenticatedBridge();
+      const bytes = await bridge.get_media(mediaSourceJson);
+      if (!(bytes instanceof Uint8Array)) throw new Error("The bridge returned invalid media data.");
+      if (bytes.byteLength > 25 * 1024 * 1024) throw new Error("Matrix media exceeds the 25 MB display limit.");
+      return bytes;
     } catch (err) {
-      console.warn("[MatrixBridge] getMedia() failed:", err);
-      return null;
+      throw new Error(`Could not retrieve Matrix media: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   // ---------------------------------------------------------------------------
-  // P0: Homeserver User Directory Search
+  // TEMPORARY DIRECT HTTP EXCEPTION — published bridge 0.1.4 has no directory
+  // search method. Replace only after Developer A ships and verifies that API.
   // ---------------------------------------------------------------------------
 
   async searchUsers(query: string, limit = 20): Promise<User[]> {
     const trimmed = query.trim();
-    const resultsMap = new Map<string, User>();
-    const sessionData = this.getSessionData();
-    const homeserver = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
-
-    // 1. If we have an active session access token, search the Matrix Homeserver User Directory
-    if (sessionData.accessToken && trimmed) {
-      try {
-        const response = await fetch(`${homeserver}/_matrix/client/v3/user_directory/search`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${sessionData.accessToken}`,
-          },
-          body: JSON.stringify({
-            search_term: trimmed,
-            limit,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data.results)) {
-            for (const item of data.results) {
-              const uId: string = item.user_id;
-              const cleanUId = uId.toLowerCase();
-              const name = item.display_name || uId.split(":")[0].replace("@", "");
-              resultsMap.set(cleanUId, {
-                id: uId,
-                name: name,
-                email: `${name.toLowerCase()}@${this.matrixDomain()}`,
-                avatarUrl: item.avatar_url,
-                status: "offline",
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("[MatrixService] Homeserver user directory search error:", err);
-      }
-    }
-
-    // 2. Search locally registered users
-    const registered = this.loadRegisteredUsers();
-    for (const u of registered) {
-      const match =
-        !trimmed ||
-        u.name.toLowerCase().includes(trimmed.toLowerCase()) ||
-        u.email.toLowerCase().includes(trimmed.toLowerCase()) ||
-        u.id.toLowerCase().includes(trimmed.toLowerCase());
-      if (match && !resultsMap.has(u.id.toLowerCase())) {
-        resultsMap.set(u.id.toLowerCase(), { ...u });
-      }
-    }
-
-    // 3. Search users currently in store
-    const store = useMatrixStore.getState();
-    for (const u of store.users) {
-      const match =
-        !trimmed ||
-        u.name.toLowerCase().includes(trimmed.toLowerCase()) ||
-        u.email.toLowerCase().includes(trimmed.toLowerCase()) ||
-        u.id.toLowerCase().includes(trimmed.toLowerCase());
-      if (match && !resultsMap.has(u.id.toLowerCase())) {
-        resultsMap.set(u.id.toLowerCase(), { ...u });
-      }
-    }
-
-    // Hydrate latest presence states
-    const results = Array.from(resultsMap.values());
-    for (const u of results) {
-      const presence = this.getCachedUserPresence(u.id) || this.getCachedUserPresence(u.email);
-      if (presence) {
-        u.status = presence;
-      }
-    }
-
+    if (!trimmed) return [];
+    this.requireAuthenticatedBridge();
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 20;
+    const data = await this.fetchMatrix(
+      "/_matrix/client/v3/user_directory/search",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ search_term: trimmed, limit: safeLimit }),
+      },
+      "Matrix user directory search",
+    );
+    const results: User[] = normalizeDirectoryResponse(data);
+    useMatrixStore.getState().setUsers(results);
     return results;
   }
 
   // ---------------------------------------------------------------------------
-  // P1: Live Matrix Presence Synchronization
+  // TEMPORARY DIRECT HTTP EXCEPTION — published bridge 0.1.4 has no presence
+  // read or write methods. Replace after Developer A verifies both capabilities.
   // ---------------------------------------------------------------------------
 
-  async setUserPresence(status: "online" | "busy" | "away" | "offline"): Promise<void> {
+  async setUserPresence(
+    status: "online" | "busy" | "away" | "offline"
+  ): Promise<void> {
     const store = useMatrixStore.getState();
     const currentUser = store.currentUser;
-    if (!currentUser) return;
+    if (!currentUser) throw new Error("Sign in before changing presence.");
 
-    // 1. Immediately update in local state
-    store.updateUserStatus(currentUser.id, status);
-
-    // 2. Broadcast across tabs via storage & window events
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(`vigilant_user_presence_${currentUser.id.toLowerCase()}`, status);
-        localStorage.setItem(`vigilant_user_presence_${currentUser.email.toLowerCase()}`, status);
-        const username = currentUser.email.split("@")[0].toLowerCase();
-        localStorage.setItem(`vigilant_user_presence_${username}`, status);
-        window.dispatchEvent(new Event("vigilant_presence_change"));
-      } catch (e) {}
-    }
-
-    // 3. Send presence state to Matrix homeserver if authenticated
+    // Send presence state to Matrix homeserver; update the UI only after acceptance.
     const sessionData = this.getSessionData();
-    const homeserver = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
     const targetUserId = sessionData.userId || currentUser.id;
 
-    if (sessionData.accessToken && targetUserId) {
-      try {
-        const matrixPresence = status === "away" || status === "busy" ? "unavailable" : status;
-        const statusMsg = status === "busy" ? "Do Not Disturb" : status === "away" ? "Away" : "";
-
-        await fetch(`${homeserver}/_matrix/client/v3/presence/${encodeURIComponent(targetUserId)}/status`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${sessionData.accessToken}`,
-          },
-          body: JSON.stringify({
-            presence: matrixPresence,
-            status_msg: statusMsg,
-          }),
-        });
-      } catch (err) {
-        console.warn("[MatrixService] Homeserver presence update error:", err);
-      }
-    }
+    if (!sessionData.accessToken || !isMatrixUserId(targetUserId)) throw new Error("No active Matrix session is available to update presence.");
+    const matrixPresence = status === "away" || status === "busy" ? "unavailable" : status;
+    const statusMessage = status === "busy" ? "Do Not Disturb" : status === "away" ? "Away" : "";
+    await this.fetchMatrix(
+      `/_matrix/client/v3/presence/${encodeURIComponent(targetUserId)}/status`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ presence: matrixPresence, status_msg: statusMessage }),
+      },
+      "Matrix presence update",
+    );
+    store.updateUserPresence(currentUser.id, matrixPresence, status, statusMessage || undefined);
   }
 
-  async getUserPresence(userId: string): Promise<"online" | "busy" | "away" | "offline"> {
-    const cached = this.getCachedUserPresence(userId);
-    if (cached) return cached;
-
+  async getUserPresence(userId: string): Promise<MatrixPresenceSnapshot> {
+    if (!isMatrixUserId(userId)) throw new Error("Enter a valid Matrix user ID to look up presence.");
     const sessionData = this.getSessionData();
-    const homeserver = process.env.NEXT_PUBLIC_HOMESERVER_URL || "http://localhost:8008";
-
-    if (sessionData.accessToken && userId.startsWith("@")) {
-      try {
-        const response = await fetch(
-          `${homeserver}/_matrix/client/v3/presence/${encodeURIComponent(userId)}/status`,
-          {
-            headers: {
-              Authorization: `Bearer ${sessionData.accessToken}`,
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const p = data.presence;
-          const statusMsg = data.status_msg || "";
-          let mapped: "online" | "busy" | "away" | "offline" = "offline";
-          if (p === "online") mapped = "online";
-          else if (p === "unavailable") mapped = statusMsg.toLowerCase().includes("busy") ? "busy" : "away";
-          else mapped = "offline";
-
-          useMatrixStore.getState().updateUserStatus(userId, mapped);
-          return mapped;
-        }
-      } catch {}
-    }
-
-    return "offline";
+    if (!sessionData.accessToken) throw new Error("No active Matrix session is available to look up presence.");
+    const payload = await this.fetchMatrix(
+      `/_matrix/client/v3/presence/${encodeURIComponent(userId)}/status`,
+      {},
+      "Matrix presence lookup",
+    );
+    const normalized = normalizePresenceResponse(payload);
+    const status = displayStatusForPresence(normalized.presence, normalized.statusMessage);
+    return { ...normalized, status };
   }
 
-  getCachedUserPresence(userId: string): "online" | "busy" | "away" | "offline" | null {
-    if (typeof window === "undefined") return null;
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private async fetchMatrix(path: string, init: RequestInit, operation: string): Promise<unknown> {
+    const sessionData = this.getSessionData();
+    if (!sessionData.accessToken) throw new Error("Sign in to use Matrix directory and presence services.");
+    let response: Response;
     try {
-      const val = localStorage.getItem(`vigilant_user_presence_${userId.toLowerCase()}`);
-      if (val === "online" || val === "busy" || val === "away" || val === "offline") {
-        return val;
+      response = await fetch(`${configuredHomeserverUrl()}${path}`, {
+        ...init,
+        headers: {
+          ...init.headers,
+          Authorization: `Bearer ${sessionData.accessToken}`,
+        },
+      });
+    } catch (error) {
+      throw new Error(`${operation} could not reach the homeserver: ${error instanceof Error ? error.message : "network request failed"}`);
+    }
+    if (!response.ok) {
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After");
+        throw new Error(`${operation} was rate limited${retryAfter ? `; retry after ${retryAfter} seconds` : "; wait before retrying"}.`);
       }
-    } catch {}
-    return null;
+      throw new Error(`${operation} failed (${response.status}).`);
+    }
+    if (init.method === "PUT") return undefined;
+    try {
+      return await response.json() as unknown;
+    } catch {
+      throw new Error(`${operation} returned invalid JSON.`);
+    }
   }
 
   private getSessionData(): { accessToken?: string; userId?: string } {
@@ -1260,59 +817,44 @@ class MatrixService {
     try {
       const raw = sessionStorage.getItem("matrix_session");
       if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      const accessToken = parsed?.tokens?.access_token || parsed?.access_token;
-      const userId = parsed?.meta?.user_id || parsed?.user_id;
-      return { accessToken, userId };
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+      const session = parsed as Record<string, unknown>;
+      const tokens = typeof session.tokens === "object" && session.tokens !== null
+        ? session.tokens as Record<string, unknown>
+        : undefined;
+      const meta = typeof session.meta === "object" && session.meta !== null
+        ? session.meta as Record<string, unknown>
+        : undefined;
+      const accessToken = typeof tokens?.access_token === "string"
+        ? tokens.access_token
+        : typeof session.access_token === "string" ? session.access_token : undefined;
+      const userId = typeof session.user_id === "string"
+        ? session.user_id
+        : typeof meta?.user_id === "string" ? meta.user_id : undefined;
+      return { accessToken, userId: isMatrixUserId(userId) ? userId : undefined };
     } catch {
       return {};
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
-  private matrixDomain(): string {
-    return process.env.NEXT_PUBLIC_MATRIX_DOMAIN || "matrix.seucra.tech";
-  }
-
-  private resolveDisplayName(email: string, username: string): string {
-    if (typeof window === "undefined") return username;
-    try {
-      const map = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
-      if (map[email.toLowerCase()]) return map[email.toLowerCase()];
-      if (map[username]) return map[username];
-    } catch (e) {}
-    return username.charAt(0).toUpperCase() + username.slice(1);
-  }
-
-  private persistUserRegistration(user: User) {
-    if (typeof window === "undefined") return;
-    try {
-      const username = user.email.split("@")[0].toLowerCase();
-      const map = JSON.parse(localStorage.getItem("vigilant_users_map") || "{}");
-
-      map[user.email.toLowerCase()] = user.name;
-      map[username] = user.name;
-      map[user.id.toLowerCase()] = user.name;
-      map[`@${username}:${this.matrixDomain().toLowerCase()}`] = user.name;
-
-      localStorage.setItem("vigilant_users_map", JSON.stringify(map));
-
-      const list: User[] = JSON.parse(
-        localStorage.getItem("vigilant_registered_users") || "[]"
-      );
-      const existingIdx = list.findIndex((u) => u.email.toLowerCase() === user.email.toLowerCase());
-      if (existingIdx >= 0) {
-        list[existingIdx] = user;
-      } else {
-        list.push(user);
-      }
-      localStorage.setItem("vigilant_registered_users", JSON.stringify(list));
-
-      window.dispatchEvent(new Event("storage"));
-    } catch (e) {}
+  private userFromSession(session: string): User {
+    const parsed: unknown = JSON.parse(session);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Matrix session did not contain a valid session object.");
+    }
+    const sessionObject = parsed as Record<string, unknown>;
+    const meta = typeof sessionObject.meta === "object" && sessionObject.meta !== null
+      ? sessionObject.meta as Record<string, unknown>
+      : undefined;
+    const userId = typeof sessionObject.user_id === "string"
+      ? sessionObject.user_id
+      : meta?.user_id;
+    if (typeof userId !== "string" || !isMatrixUserId(userId)) {
+      throw new Error("Matrix session did not contain a valid user ID.");
+    }
+    const localpart = userId.slice(1, userId.indexOf(":"));
+    return { id: userId, name: localpart };
   }
 }
 
