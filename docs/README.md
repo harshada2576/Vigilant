@@ -67,3 +67,4 @@ Practical setup and local development instructions:
 - Prerequisites (Node.js 22+, npm).
 - Environment configuration (`NEXT_PUBLIC_HOMESERVER_URL`).
 - Development commands, verification scripts, and common troubleshooting tips.
+
