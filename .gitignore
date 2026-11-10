@@ -26,14 +26,9 @@ frontend/coverage/
 
 # Environment configurations and local secrets
 .env
-.env*.local
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 frontend/.env
-frontend/.env*.local
-frontend/.env.local
+frontend/.env.*
 
 # WebAssembly binaries
 *.wasm
@@ -43,11 +38,16 @@ frontend/public/matrix_sdk_bridge_bg.wasm
 # Rust build artifacts
 **/target/
 matrix-sdk-bridge/target/
+matrix-sdk-bridge/pkg/
+matrix-sdk-bridge/pkg-*/
 
 # Synapse runtime data and generated keys
 synapse/homeserver.yaml
 synapse/*.signing.key
 synapse/*.log
+synapse/*.pid
+synapse/*.db
+synapse/*.db-*
 synapse/media_store/
 synapse/uploads/
 synapse/__pycache__/

@@ -2,7 +2,7 @@
 
 ## Completed by Developer B
 
-- Kept the published bridge dependency at `@seucra/matrix-sdk-bridge@0.1.4`.
+- Kept the published bridge dependency at `@seucra/matrix-sdk-bridge@0.1.5`.
 - Hardened the single Matrix service boundary, authentication/session cleanup, room/history parsing, directory/presence response parsing, avatar/media URL handling and composer error behavior.
 - Added a small Node built-in test suite for Matrix IDs, directory/presence normalization, history and room payload validation, stable message identity, message ordering/deduplication and media signatures.
 - Added current integration, API contract, architecture, setup and verification documentation.
@@ -30,9 +30,9 @@ When the replacement package is delivered, Developer B should inspect its packag
 
 Current references:
 
-- Published runtime package WASM: `262E38F2C91159EBB358B0420F8B03B06FE21945F9764428926B1C4D9EDE8DF6`.
+- Published runtime package WASM: `18A23C3F80004DAAE5FA9EEB8C353A651ED1D4AC0B39F70B74DD539B3B58FF15`.
 - Separate workspace `pkg` WASM: `74EC6FF9DE0C00508D9FDDF1B2D48D14E14C962C779DAA18BCFF510D2D86BA44`.
-- Current dependency remains `^0.1.4` in the existing frontend manifest/lockfile.
+- Current dependency is `^0.1.5` in the frontend manifest/lockfile.
 
 ## Developer B next steps
 
@@ -44,7 +44,7 @@ Current references:
 ## Risks and limits
 
 - No live Synapse account was used for verification.
-- Callback JSON structure is inferred from workspace Rust source version 0.1.0 and is not proven identical to the installed npm 0.1.4 binary.
+- Callback JSON structure is validated at runtime because the installed declaration leaves callback parameters untyped.
 - No Matrix event IDs means exact duplicate events sharing a timestamp/content fingerprint cannot be identified perfectly.
 - `sessionStorage` is JavaScript-readable and is subject to browser storage policy. It is used only because the bridge session must survive reload; no password is stored.
 - This was a frontend reliability review, not a formal penetration test or certification.

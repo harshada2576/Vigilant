@@ -2,7 +2,7 @@
 title: "Vigilant Matrix SDK Bridge"
 subtitle: "WebAssembly API Reference and Frontend Integration Guide"
 author: "Vigilant Engineering"
-date: "July 2026"
+date: "November 2026"
 version: "Backend Cycle 1 · v0.1"
 lang: "en"
 toc: true
@@ -36,7 +36,8 @@ This document is intended primarily for frontend integration. It defines:
 * expected frontend workflows;
 * errors and Cycle 1 limitations.
 
-The API described here corresponds to **Backend Cycle 1, version 0.1**.
+The API described here corresponds to **Backend Cycle 1, version 0.1**. For the currently
+installed browser package, see [the verified 0.1.5 contract](integration/MATRIX_BRIDGE_API_CONTRACT.md).
 
 ## Scope
 
@@ -121,13 +122,15 @@ This means the same compiled WebAssembly package can target different Matrix hom
 
 ## Generated Package
 
-Running:
+Historically, running:
 
 ```bash
 wasm-pack build --target web
 ```
 
-generates the browser-consumable package under `pkg/`.
+generates a browser-consumable package under `pkg/`. The frontend currently consumes the published
+`@seucra/matrix-sdk-bridge@0.1.5` package instead; workspace-generated `pkg` artifacts are not
+the frontend runtime and are ignored by Git.
 
 Important generated artifacts include:
 
@@ -1659,4 +1662,3 @@ Backend Cycle 1 establishes the core communication path from browser JavaScript 
 The frontend should treat the documented `MatrixBridge` interface and its serialized data structures as the integration boundary. Internal Rust and Matrix SDK implementation details are not part of the frontend contract.
 
 Subsequent development cycles may extend or refine this contract while preserving compatibility where practical.
-

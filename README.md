@@ -8,9 +8,9 @@ Vigilant is a high-performance, private corporate messaging application built on
 ## 🛠️ Technology Stack
 
 - **Frontend**: Next.js 16 (App Router), TypeScript, TailwindCSS v4, Lucide React, Zustand State Management
-- **Matrix Client Binding**: Published Rust WebAssembly Bridge (`@seucra/matrix-sdk-bridge@0.1.4`)
+- **Matrix Client Binding**: Published Rust WebAssembly Bridge (`@seucra/matrix-sdk-bridge@0.1.5`)
 - **Backend Homeserver**: Matrix Synapse (`matrixdotorg/synapse:latest`)
-- **Database**: PostgreSQL 16
+- **Database**: PostgreSQL 17
 - **Media Object Store**: MinIO S3 Compatible Storage
 
 ---
@@ -18,22 +18,25 @@ Vigilant is a high-performance, private corporate messaging application built on
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
-- Node.js 18+ and `npm`
+- Node.js 22+ and `npm`
 - Docker & Docker Compose
 
 ### 1. Environment & Backend Infrastructure
 
-Create a `.env` file from `.env.example` to define secure local credentials:
+Create `frontend/.env.local` with the public URL of the Matrix homeserver:
+
+```dotenv
+NEXT_PUBLIC_HOMESERVER_URL=http://localhost:8008
+```
+
+Do not commit this file or place passwords/access tokens in it. The URL is browser configuration, not a secret.
 
 ```bash
-# Copy sample environment configuration
-cp .env.example .env
-
 # Generate Synapse homeserver configuration
 cp homeserver.yaml.example synapse/homeserver.yaml
 
-# Start PostgreSQL, MinIO, and Synapse containers
-docker compose up -d
+# Start the verified local services
+docker compose up -d postgres synapse
 
 # Verify Synapse health endpoint
 curl http://localhost:8008/_matrix/client/versions
@@ -67,11 +70,11 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 - **Matrix Rooms & Direct Messages**: Lists rooms and direct conversations returned by the homeserver; encryption state is not exposed by the installed bridge.
 - **Dynamic 20-Message Initial Loading**: Optimized memory footprint by loading the most recent 20 messages on room mount.
 - **Scroll-Up Infinite History Pagination**: Smoothly fetches earlier messages in 20-event batches when scrolling to top, maintaining exact scroll position without layout shifts or jumping.
-- **Matrix Synchronization**: The frontend requests sync startup and receives bridge message callbacks; bridge 0.1.4 does not report sync connection or completion state.
+- **Matrix Synchronization**: The frontend requests sync startup and receives bridge message and typing callbacks; bridge 0.1.5 does not report sync connection or completion state.
 - **Date Dividers & Visual Empty States**: Smart timeline date dividers (`Today`, `Yesterday`, formatted calendar dates) and rich onboarding cards for empty rooms.
 
 ### 👥 User Directory & Live Presence
-- **Matrix Homeserver Directory Search**: Debounced search uses an authenticated direct Matrix request because bridge 0.1.4 has no directory method.
+- **Matrix Homeserver Directory Search**: Debounced search uses an authenticated direct Matrix request because bridge 0.1.5 has no directory method.
 - **Presence Lookup and Update**: Authenticated direct Matrix presence requests remain temporary bridge exceptions; status is not a live stream and unknown is distinct from offline.
 
 ### 📄 File Sharing & Downloads
@@ -110,7 +113,11 @@ Vigilant/
 │   └── package.json           # Uses the published @seucra/matrix-sdk-bridge package
 ├── synapse/                   # Synapse homeserver configuration
 ├── matrix-sdk-bridge/         # Modular Rust WASM SDK source code & pkg output
-├── docker-compose.yml         # Container orchestrator
+├── docker-compose.yml         # PostgreSQL, Synapse and optional MinIO services
+├── docs/                      # Architecture, integration, testing and operations docs
 └── README.md
 ```
 
+The current frontend verification covers PostgreSQL and Synapse. The MinIO service remains in
+Compose for the intended media-storage architecture, but its floating `latest` image is not
+part of the verified startup path; pin a supported image before relying on it.

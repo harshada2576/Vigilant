@@ -271,6 +271,27 @@ class MatrixService {
         console.error("[MatrixBridge] Ignored an invalid notification event from the bridge.");
       }
     });
+
+    if (typeof bridge.on_typing === "function") {
+      bridge.on_typing((jsonTyping: string | unknown) => {
+        try {
+          if (bridgeInstance !== bridge || !useMatrixStore.getState().currentUser) return;
+          const data = typeof jsonTyping === "string" ? JSON.parse(jsonTyping) : jsonTyping;
+          if (!data || typeof data !== "object") return;
+          const roomId = (data as { room_id?: string; roomId?: string }).room_id || (data as { roomId?: string }).roomId;
+          const userIds = Array.isArray((data as { user_ids?: string[] }).user_ids)
+            ? (data as { user_ids: string[] }).user_ids
+            : Array.isArray((data as { userIds?: string[] }).userIds)
+              ? (data as { userIds: string[] }).userIds
+              : [];
+          if (typeof roomId === "string") {
+            useMatrixStore.getState().setTypingUsers(roomId, userIds);
+          }
+        } catch {
+          console.error("[MatrixBridge] Ignored an invalid typing event from the bridge.");
+        }
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -615,6 +636,31 @@ class MatrixService {
       throw new Error("Unsupported Matrix message payload.");
     } catch (e) {
       throw new Error(`Message was not accepted by Matrix: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async sendTypingNotice(roomId: string, typing: boolean): Promise<void> {
+    if (!isMatrixRoomId(roomId)) throw new Error("This is not a valid Matrix room ID.");
+    const bridge = this.requireAuthenticatedBridge();
+    if (typeof bridge.send_typing_notice === "function") {
+      try {
+        await bridge.send_typing_notice(roomId, typing);
+      } catch (e) {
+        console.warn("[MatrixBridge] Failed to send typing notice:", e);
+      }
+    }
+  }
+
+  async markAsRead(roomId: string, eventId: string): Promise<void> {
+    if (!isMatrixRoomId(roomId)) throw new Error("This is not a valid Matrix room ID.");
+    if (!eventId || typeof eventId !== "string") throw new Error("A valid event ID is required to mark as read.");
+    const bridge = this.requireAuthenticatedBridge();
+    if (typeof bridge.mark_as_read === "function") {
+      try {
+        await bridge.mark_as_read(roomId, eventId);
+      } catch (e) {
+        console.warn("[MatrixBridge] Failed to mark event as read:", e);
+      }
     }
   }
 

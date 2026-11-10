@@ -4,8 +4,8 @@
 
 - **Project:** Vigilant
 - **Workstream:** Developer B — Frontend & Matrix WASM Bridge Remediation
-- **Verification Date:** 2026-11-01
-- **Installed Bridge Package Version:** `@seucra/matrix-sdk-bridge@0.1.4`
+- **Verification Date:** 2026-11-09
+- **Installed Bridge Package Version:** `@seucra/matrix-sdk-bridge@0.1.5`
 - **Frontend Environment Details:**
   - Operating System: Windows (win32 10.0.26100)
   - Node.js Version: v22.18.0
@@ -23,10 +23,10 @@
 | ESLint | PASS | `npm run lint` exited code 0 (`eslint` completed with 0 errors, 0 warnings). |
 | Node unit tests | PASS | `npm test` (`node --test`) exited code 0. 15 tests passed, 0 failed, 0 cancelled, 0 skipped (duration: ~439ms). |
 | Production build | PASS | `npm run build` (`next build`) exited code 0. Turbopack compiled successfully in 85s; static & dynamic routes generated (`/`, `/_not-found`, `/dashboard`, `/dashboard/c`, `/dashboard/c/[channelId]`, `/dashboard/dm`, `/dashboard/dm/[roomId]`, `/login`, `/register`). |
-| Browser smoke test | BLOCKED | Browser automation helper cannot reliably identify the running browser tab URL in this headless environment. Per Phase 10 execution instructions, computer-use UI interaction was withheld to prevent ambiguous operations or form submissions. |
+| Browser smoke test | PASS | Local browser registered `vigilantdemo`, reached `/dashboard`, cleared the tab session, then signed in again with the same account and reached `/dashboard`. |
 | Local HTTP check | PASS | Live Next.js server (`next start`) verified on `http://localhost:3000`. Endpoints returning 200 OK: `/` (21.4KB), `/login` (13.8KB), `/register` (14.3KB), `/dashboard` (200 OK), `/dashboard/c` (200 OK), `/dashboard/dm` (200 OK), and `/matrix_sdk_bridge_bg.wasm` (26.2MB, SHA256 verified). |
-| Live Synapse integration | NOT RUN / BLOCKED | Strictly prohibited from contacting a Matrix homeserver or submitting authentication forms without an isolated, authorized test account. No mock data or fabricated success states were used. |
-| WASM hash comparison | PASS | Frontend public WASM (`262E38F2C91159EBB358B0420F8B03B06FE21945F9764428926B1C4D9EDE8DF6`) matches installed package WASM (`frontend/node_modules/@seucra/matrix-sdk-bridge/matrix_sdk_bridge_bg.wasm`) exactly. Workspace `matrix-sdk-bridge/pkg` WASM (`74EC6FF9DE0C00508D9FDDF1B2D48D14E14C962C779DAA18BCFF510D2D86BA44`) was verified separate and uninstalled. |
+| Live Synapse integration | PASS (local) | Docker Synapse 1.164.2 and Postgres were running on `http://localhost:8008`; registration and login were verified through the frontend. |
+| WASM hash comparison | PASS | Frontend public WASM (`18A23C3F80004DAAE5FA9EEB8C353A651ED1D4AC0B39F70B74DD539B3B58FF15`) matches installed package WASM (`frontend/node_modules/@seucra/matrix-sdk-bridge/matrix_sdk_bridge_bg.wasm`) exactly. Workspace `matrix-sdk-bridge/pkg` WASM (`74EC6FF9DE0C00508D9FDDF1B2D48D14E14C962C779DAA18BCFF510D2D86BA44`) was verified separate and uninstalled. |
 | Git diff check | PASS | `git diff --check` exited code 0 with no whitespace errors or conflict markers. |
 
 ---
@@ -98,16 +98,16 @@ Executed test suite: `frontend/tests/matrixPayload.test.mjs` using Node.js built
 
 ## Known Limitations
 
-1. **Installed Bridge API Gaps (`@seucra/matrix-sdk-bridge@0.1.4`):**
+1. **Installed Bridge API Gaps (`@seucra/matrix-sdk-bridge@0.1.5`):**
    - **User Directory & Presence:** The installed bridge does not export directory search or presence read/write methods. These operations remain isolated direct Matrix HTTP exceptions in `matrixService.ts`.
    - **Sync Lifecycle Callbacks:** `start_sync()` returns `void` with no connected/disconnected/error callback or initial-sync completion signal. The UI accurately represents sync status as `unknown`.
    - **Event IDs:** Bridge history and callback payloads omit Matrix event IDs. Message deduplication relies on cryptographic content/timestamp fingerprints.
-   - **Room Members & Presence Streams:** Bridge 0.1.4 has no room member enumeration or real-time presence push.
+   - **Room Members & Presence Streams:** Bridge 0.1.5 has no room member enumeration or real-time presence push.
    - **Profile MXC Resolution:** Bridge has no method to resolve `mxc://` avatars to HTTP media; unresolvable avatars fall back to user initials.
-   - **Typing & Read Receipts:** No typing indicator or read receipt APIs are exported by the bridge.
+   - **Typing & Read Receipts:** Bridge 0.1.5 exports typing and read-receipt methods; their multi-user behavior still needs verification.
 2. **Environment & Tooling Limitations:**
-   - **Live Homeserver:** No live Synapse homeserver was provided for end-to-end integration testing.
-   - **Browser Automation:** Direct browser interaction was blocked to adhere to the mandate avoiding fake data or unverified external submissions.
+   - **Live Homeserver:** Verification used the local Docker Synapse only; no external deployment was tested.
+   - **Container storage:** The compose file's legacy MinIO image reference is not pullable, so only Postgres and Synapse were started for auth verification.
 
 ---
 
@@ -119,8 +119,7 @@ The Developer B frontend verification cycle is **COMPLETE** within the scope of 
 - TypeScript compile check passes (0 errors).
 - ESLint passes with 0 errors and 0 warnings.
 - Next.js Turbopack production build succeeds with all routes generated.
-- Package WASM integrity is confirmed (SHA-256 matches installed bridge 0.1.4).
+- Package WASM integrity is confirmed (SHA-256 matches installed bridge 0.1.5).
 - No mock data or local fake fallbacks are used.
 
-Full live end-to-end verification remains **BLOCKED** pending the availability of an authorized live Matrix Synapse test homeserver and delivery of Developer A's updated bridge package.
-
+Full multi-user end-to-end verification remains **OUTSTANDING**; local registration and login are verified.

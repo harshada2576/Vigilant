@@ -6,14 +6,18 @@
 Next.js client UI
   ├─ authentication and dashboard routes
   ├─ ChatWindow and shared UI components
-  └─ matrixService.ts ── MatrixBridge 0.1.4 ── Matrix homeserver
+  └─ matrixService.ts ── MatrixBridge 0.1.5 ── Matrix homeserver
                          └─ direct HTTP directory/presence exceptions
 
 matrixStore.ts (Zustand) holds the current tab's UI view of the session,
 rooms, users, messages, pagination, and connection/error status.
 ```
 
-`matrixService.ts` is the only frontend Matrix integration boundary. Components do not call Matrix endpoints directly. The installed bridge package remains the runtime dependency; its generated TypeScript declarations define the allowed method names. Directory search and presence bypass the bridge only because those methods are absent in 0.1.4.
+`matrixService.ts` is the only frontend Matrix integration boundary. Components do not call Matrix endpoints directly. The installed bridge package remains the runtime dependency; its generated TypeScript declarations define the allowed method names. Directory search and presence bypass the bridge only because those methods are absent in 0.1.5.
+
+The local infrastructure boundary is separate from the browser boundary: Synapse and PostgreSQL are
+the verified development services, while MinIO remains an optional Compose service until a pinned
+image is validated.
 
 ## Session lifecycle
 
@@ -29,7 +33,7 @@ rooms, users, messages, pagination, and connection/error status.
 
 The store owns the visible current user, server-backed room list, room-keyed messages/pagination, directory results, loading state and sync/auth error state. It does not persist fake Matrix state. A successfully requested sync start maps to `syncStatus: "unknown"`, because the bridge exposes no sync event. Authentication and synchronization are intentionally separate indicators.
 
-Messages are room-keyed and sorted chronologically. Bridge 0.1.4 omits Matrix event IDs, so the service uses a stable payload fingerprint to align sync events with history results. This reduces duplicate insertion but cannot distinguish two otherwise identical events in the same timestamp; a real event ID is required for a complete fix. Pagination merges by that stable ID and does not collapse messages solely because text/timestamp match.
+Messages are room-keyed and sorted chronologically. Bridge 0.1.5 omits Matrix event IDs, so the service uses a stable payload fingerprint to align sync events with history results. This reduces duplicate insertion but cannot distinguish two otherwise identical events in the same timestamp; a real event ID is required for a complete fix. Pagination merges by that stable ID and does not collapse messages solely because text/timestamp match.
 
 ## Message lifecycle
 
@@ -45,17 +49,17 @@ Manual retry remains an explicit user action. The UI warns that a lost response 
 ## Media lifecycle
 
 - The composer accepts supported raster image MIME types and PDF. Upload size is capped at 25 MiB; PDFs require a `.pdf` name and `%PDF-` signature. Declared MIME must match the content signature.
-- The service calls only `send_image`, `send_file` and `get_media` from the installed bridge. There is no invented progress display because 0.1.4 has no progress callback.
+- The service calls only `send_image`, `send_file` and `get_media` from the installed bridge. There is no invented progress display because 0.1.5 has no progress callback.
 - Downloaded data is size-limited to 25 MiB and checked against supported image/PDF signatures before rendering. Local object URLs are revoked on cleanup.
 - Matrix avatar `mxc://` conversion is unavailable in the bridge; unsafe and unsupported image sources fall back to initials.
 
 ## Presence and directory
 
-Directory search and presence GET/PUT use authenticated direct Matrix HTTP requests because 0.1.4 has no bridge equivalents. Responses are validated. Presence keeps `online`, `unavailable`, `offline` and `unknown` distinct; `busy`/`away` are display labels based on `unavailable` and its exact status message. A profile lookup shows the returned snapshot, while the app does not claim it is a live presence stream.
+Directory search and presence GET/PUT use authenticated direct Matrix HTTP requests because 0.1.5 has no bridge equivalents. Responses are validated. Presence keeps `online`, `unavailable`, `offline` and `unknown` distinct; `busy`/`away` are display labels based on `unavailable` and its exact status message. A profile lookup shows the returned snapshot, while the app does not claim it is a live presence stream.
 
 ## Error behavior and unsupported features
 
-Errors from bridge calls, HTTP requests, payload parsing, session persistence, history, sends and media are propagated to the relevant UI. No local account, room, message, membership or presence fallback exists. The bridge lacks room-member enumeration, profile lookup, typing, receipts, sync lifecycle/error events and listener cleanup. UI states explain those gaps instead of supplying invented values.
+Errors from bridge calls, HTTP requests, payload parsing, session persistence, history, sends and media are propagated to the relevant UI. No local account, room, message, membership or presence fallback exists. The bridge lacks room-member enumeration, profile lookup, sync lifecycle/error events and listener cleanup. Typing notices and read receipts are available through bridge 0.1.5 and are wired through the service. UI states explain the remaining gaps instead of supplying invented values.
 
 ## Browser persistence boundary
 

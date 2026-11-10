@@ -1,6 +1,8 @@
 # Vigilant Documentation
 
-This directory contains the technical documentation, architectural specifications, API contracts, verification reports, and handoff guides for Project Vigilant.
+This directory contains the technical documentation, architectural specifications, API contracts,
+verification reports, and handoff guides for Project Vigilant. Active guides were reviewed on
+2026-11-10; dated audit and screenshot files are retained as historical evidence.
 
 ---
 
@@ -10,15 +12,22 @@ This directory contains the technical documentation, architectural specification
 docs/
 ├── README.md                                  # This documentation index
 ├── README_FRONTEND.md                         # Frontend developer guide & setup instructions
+├── startup-recommended.md                     # Verified local startup sequence
+├── matrix-bridge-api.md                       # Legacy Cycle 1 bridge reference
 ├── DEVELOPER_B_HANDOFF.md                     # Developer B completion summary & Developer A dependencies
 ├── architecture/
 │   └── FRONTEND_ARCHITECTURE.md               # Frontend architecture, data flow & lifecycle specifications
 ├── integration/
 │   ├── FRONTEND_INTEGRATION_STATUS.md         # Current Matrix backend integration status & boundary rules
-│   └── MATRIX_BRIDGE_API_CONTRACT.md          # @seucra/matrix-sdk-bridge@0.1.4 API contract & method reference
+│   └── MATRIX_BRIDGE_API_CONTRACT.md          # @seucra/matrix-sdk-bridge@0.1.5 API contract & method reference
 └── testing/
     └── FRONTEND_VERIFICATION_REPORT.md        # Comprehensive verification report (tests, lint, build, hashes)
 ```
+
+Historical records:
+
+- `AUDIT-2026-11-09.md` records the 2026-11-09 implementation audit.
+- `SCREENSHOT-WALKTHROUGH-2026-11-09.md` records the browser walkthrough and its captured routes.
 
 ---
 
@@ -35,10 +44,10 @@ Detailed specification of the frontend system design:
 
 ### 2. [Integration Status](integration/FRONTEND_INTEGRATION_STATUS.md)
 Current status of the Matrix homeserver integration:
-- Verified package boundary with `@seucra/matrix-sdk-bridge@0.1.4`.
+- Verified package boundary with `@seucra/matrix-sdk-bridge@0.1.5`.
 - Methods implemented via WebAssembly bridge.
 - Temporary direct Matrix HTTP exceptions (directory search & presence GET/PUT) with replacement requirements.
-- Missing bridge capabilities (member enumeration, typing, receipts, sync lifecycle).
+- Missing bridge capabilities (member enumeration and sync lifecycle).
 
 ### 3. [Matrix Bridge API Contract](integration/MATRIX_BRIDGE_API_CONTRACT.md)
 Formal API contract of the installed WebAssembly bridge package:
@@ -53,7 +62,7 @@ Evidence-based verification report:
 - **ESLint:** Clean pass (0 errors, 0 warnings).
 - **Node.js Unit Tests:** 15/15 tests passing across identifiers, payloads, presence, media signatures, and message deduplication.
 - **Production Build:** Next.js Turbopack production build pass across all static and dynamic routes.
-- **WASM Integrity:** SHA-256 hash match (`262E38F2C91159EBB358B0420F8B03B06FE21945F9764428926B1C4D9EDE8DF6`).
+- **WASM Integrity:** SHA-256 hash match (`18A23C3F80004DAAE5FA9EEB8C353A651ED1D4AC0B39F70B74DD539B3B58FF15`).
 
 ### 5. [Developer B Handoff](DEVELOPER_B_HANDOFF.md)
 Handoff instructions and outstanding dependencies:
@@ -68,3 +77,9 @@ Practical setup and local development instructions:
 - Environment configuration (`NEXT_PUBLIC_HOMESERVER_URL`).
 - Development commands, verification scripts, and common troubleshooting tips.
 
+## Current local verification boundary
+
+The verified local startup path is `docker compose up -d postgres synapse`, followed by the
+frontend development server. The Compose MinIO service is not currently verified because its
+floating `minio/minio:latest` image is not pullable in the recorded environment. Do not describe
+local media storage as verified until that image is pinned and the service is tested.

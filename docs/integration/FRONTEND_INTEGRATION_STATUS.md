@@ -1,8 +1,9 @@
 # Frontend Matrix Integration Status
 
-**Verified on:** 2026-11-01  
+**Verified on:** 2026-11-09  
+**Documentation review:** 2026-11-10
 **Frontend package:** `frontend` (`frontend@0.1.0`)  
-**Bridge dependency:** `@seucra/matrix-sdk-bridge@0.1.4`
+**Bridge dependency:** `@seucra/matrix-sdk-bridge@0.1.5`
 
 ## Architecture
 
@@ -12,7 +13,7 @@ The frontend keeps one Matrix boundary in `frontend/src/services/matrixService.t
 Next.js client components
   → matrixService.ts
   → matrixStore.ts (UI state)
-  → @seucra/matrix-sdk-bridge 0.1.4
+  → @seucra/matrix-sdk-bridge 0.1.5
   → Rust/WASM Matrix SDK client
   → configured Matrix homeserver
 ```
@@ -21,15 +22,15 @@ Next.js client components
 
 ## Verified package boundary
 
-The installed package is version `0.1.4` and TypeScript resolves its declaration file at `matrix_sdk_bridge.d.ts`. Its complete exported method list and exact signatures are recorded in [MATRIX_BRIDGE_API_CONTRACT.md](MATRIX_BRIDGE_API_CONTRACT.md). The checked-in `frontend/public/matrix_sdk_bridge_bg.wasm` and the installed package WASM have the same SHA-256:
+The installed package is version `0.1.5` and TypeScript resolves its declaration file at `matrix_sdk_bridge.d.ts`. Its complete exported method list and exact signatures are recorded in [MATRIX_BRIDGE_API_CONTRACT.md](MATRIX_BRIDGE_API_CONTRACT.md). The checked-in `frontend/public/matrix_sdk_bridge_bg.wasm` and the installed package WASM have the same SHA-256:
 
-`262E38F2C91159EBB358B0420F8B03B06FE21945F9764428926B1C4D9EDE8DF6`
+`18A23C3F80004DAAE5FA9EEB8C353A651ED1D4AC0B39F70B74DD539B3B58FF15`
 
 The separate `matrix-sdk-bridge/pkg` WASM file hashes to `74EC6FF9DE0C00508D9FDDF1B2D48D14E14C962C779DAA18BCFF510D2D86BA44`; it is not the frontend runtime artifact and was not installed as the dependency.
 
 The local Rust `Cargo.toml` declares Matrix SDK and UI 0.18.0. The installed npm package does not identify its source revision or SDK version, so 0.18.0 is a source declaration, not independently verified npm build metadata.
 
-## Implemented with bridge 0.1.4
+## Implemented with bridge 0.1.5
 
 The service calls only methods present in the installed declaration:
 
@@ -37,9 +38,9 @@ The service calls only methods present in the installed declaration:
 - Joined-room and direct-message listing.
 - Channel creation/joining, direct-message lookup/creation, leave and invitations.
 - Text, image and file sending; room history and pagination; media retrieval.
-- Sync start/stop and message/notification callback registration.
+- Sync start/stop, message/notification/typing callback registration, typing notices and read receipts.
 
-UI state represents authentication after the bridge confirms a session. Calling `start_sync()` only requests sync startup: the installed bridge exposes no sync lifecycle or error callback, so the UI reports sync as unknown. Message send success is described as “Matrix accepted the send request”; delivery/read confirmation is unavailable.
+UI state represents authentication after the bridge confirms a session. Calling `start_sync()` only requests sync startup: the installed bridge exposes no sync lifecycle or error callback, so the UI reports sync as unknown. Message send success is described as “Matrix accepted the send request”; typing and read-receipt calls are available but need multi-user verification.
 
 ## Temporary direct Matrix HTTP exceptions
 
@@ -55,10 +56,9 @@ The requests use the token from the actual bridge session, validate responses, r
 
 ## Missing bridge functionality
 
-- User profile lookup beyond directory-provided fields.
 - Room member enumeration and membership state.
 - Sync state/error events and callback removal.
-- Typing notifications and read receipts.
+- User profile lookup and room member enumeration.
 - Upload progress.
 - Stable Matrix event IDs in message history/callback payloads.
 - Profile-avatar MXC media resolution.
@@ -67,14 +67,13 @@ The current UI does not invent these results. Room member count is unavailable; 
 
 ## Known limitations
 
-- Live Synapse sign-in, sync, room, message and media workflows were not verified in this environment; see the verification report.
+- Local Synapse sign-in was verified in the browser; multi-user sync, room, message and media workflows remain to be verified.
 - Message identifiers are stable fingerprints of room, sender, timestamp, type, content and media source because no event ID is exported. Identical payloads at the same timestamp cannot be distinguished perfectly; Developer A should add the Matrix event ID to callback and history models.
-- `on_message`/`on_notification` are declared as untyped `Function` callbacks. Workspace Rust source indicates JSON-string payloads, but its crate version is 0.1.0 while the npm package is 0.1.4; those schemas are validated defensively and remain unverified against the installed binary.
+- `on_message`/`on_notification`/`on_typing` are declared as untyped `Function` callbacks. Payloads are validated defensively at the service boundary.
 - The bridge does not expose a separate authenticated homeserver connectivity state. The UI distinguishes signed-in from sync unknown.
 
 ## Next steps
 
-1. Developer A supplies a versioned bridge package with the missing APIs listed above, typed declarations, payload schemas and sync lifecycle behavior.
-2. Developer B inspects the delivered package and WASM hash before changing the dependency.
-3. Replace the three direct HTTP exceptions only after equivalent bridge methods are verified.
-4. Add real Synapse integration and browser tests using an explicitly configured test account.
+1. Add a verified profile/member API or keep those capabilities explicitly unavailable.
+2. Add sync lifecycle/error callbacks and stable Matrix event IDs to the bridge.
+3. Add multi-user browser coverage for typing, receipts, rooms and media.

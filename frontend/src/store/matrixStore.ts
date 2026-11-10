@@ -11,6 +11,7 @@ interface MatrixState {
   rooms: Room[];
   messages: Record<string, Message[]>; // roomId -> messages
   hasMoreMessages: Record<string, boolean>; // roomId -> boolean
+  typingUsers: Record<string, string[]>; // roomId -> array of userIds typing
   activeRoomId: string | null;
   users: User[]; // User directory for search/DMs
   isConnecting: boolean;
@@ -28,6 +29,7 @@ interface MatrixState {
   prependMessages: (roomId: string, messages: Message[]) => void;
   setMessages: (roomId: string, messages: Message[]) => void;
   setHasMoreMessages: (roomId: string, hasMore: boolean) => void;
+  setTypingUsers: (roomId: string, userIds: string[]) => void;
   setUsers: (users: User[]) => void;
   updateUserPresence: (userId: string, presence: MatrixPresence, status?: User["status"], statusMessage?: string) => void;
   setConnecting: (isConnecting: boolean) => void;
@@ -42,6 +44,7 @@ export const useMatrixStore = create<MatrixState>((set) => ({
   rooms: [],
   messages: {},
   hasMoreMessages: {},
+  typingUsers: {},
   activeRoomId: null,
   users: [],
   isConnecting: false,
@@ -157,6 +160,12 @@ export const useMatrixStore = create<MatrixState>((set) => ({
       [roomId]: hasMore,
     },
   })),
+  setTypingUsers: (roomId, userIds) => set((state) => ({
+    typingUsers: {
+      ...state.typingUsers,
+      [roomId]: userIds,
+    },
+  })),
   setUsers: (users) => set({ users }),
   updateUserPresence: (userId, presence, status, statusMessage) => set((state) => {
     const update = (user: User): User => ({ ...user, presence, status, statusMessage });
@@ -173,6 +182,7 @@ export const useMatrixStore = create<MatrixState>((set) => ({
     rooms: [],
     messages: {},
     hasMoreMessages: {},
+    typingUsers: {},
     activeRoomId: null,
     users: [],
     isConnecting: false,
